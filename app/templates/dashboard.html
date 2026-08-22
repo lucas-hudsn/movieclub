@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ cycle.period|month }} // movie club{% endblock %}
+{% block content %}
+
+<header class="cycle-head">
+  <h1>{{ cycle.period|month }}</h1>
+  <p class="phase">
+    {% if cycle.status == CycleStatus.submitting %}
+      submissions open
+    {% elif cycle.status == CycleStatus.ranking %}
+      ranking
+    {% else %}
+      closed
+    {% endif %}
+  </p>
+</header>
+
+{% if cycle.status == CycleStatus.closed and winner %}
+<section class="winner-banner">
+  <h2>monthly winner</h2>
+  <p class="win-title">{{ winner.title }} ({{ winner.year }})</p>
+  <p class="dim">submitted by {{ winner.user.name }}</p>
+  {% if loser %}
+    <p class="error">last place: {{ loser.title }} &mdash; {{ loser.user.name }} sits out next cycle.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="panel">
+  <h2>submissions ({{ submissions|length }})</h2>
+  <div class="posters">
+    {% for s in submissions %}
+    <div class="poster-card">
+      {% if s.poster_url %}
+        <img src="{{ s.poster_url }}" alt="{{ s.title }} poster">
+      {% else %}
+        <div class="no-poster">no signal</div>
+      {% endif %}
+      <h3>{{ s.title }}</h3>
+      <p class="dim">{{ s.year }} &mdash; {{ s.user.name }}</p>
+      {% if s.plot %}<p class="plot">{{ s.plot[:180] }}&hellip;</p>{% endif %}
+      {% if user.id == s.user_id and cycle.status == CycleStatus.submitting %}
+      <form method="post" action="/submissions/{{ s.id }}/delete">
+        <button type="submit" class="danger linklike">withdraw</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="dim">static... no films yet.</p>
+    {% endfor %}
+  </div>
+</section>
+
+{% if can_submit %}
+<section class="panel">
+  <h2>submit a film</h2>
+  <input type="text" name="q" placeholder="search the archive..." autocomplete="off"
+         hx-get="/partials/search" hx-trigger="keyup changed delay:400ms" hx-target="#search-results">
+  <div id="search-results"></div>
+</section>
+{% elif banned_this_cycle and cycle.status == CycleStatus.submitting %}
+<p class="error">you lost last month, so you can rank but not submit this month.</p>
+{% elif cycle.status == CycleStatus.submitting and my_submission %}
+<p class="ok">your film is locked in for this month.</p>
+{% endif %}
+
+{% if cycle.status == CycleStatus.ranking %}
+<section class="panel">
+  <h2>rank the films</h2>
+  <p class="dim">best to worst. #1 gets the most points. move with &#9650;/&#9660;.</p>
+  {% include "partials/ranking.html" %}
+  <form hx-post="/cycles/{{ cycle.id }}/abstain" hx-target="#ballot">
+    <button type="submit" class="linklike dim">abstain</button>
+  </form>
+</section>
+
+<div class="panel">
+  <h2>tally</h2>
+  <table>
+    <thead><tr><th>#</th><th>film</th><th>pts</th><th>#1s</th></tr></thead>
+    <tbody>
+    {% for r in results %}
+      <tr><td>{{ loop.index }}</td><td>{{ r.submission.title }}</td><td>{{ r.points }}</td><td>{{ r.firsts }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if user.is_admin %}
+<form method="post" action="/admin/cycles/{{ cycle.id }}/close">
+  <button type="submit" class="danger">close cycle, crown winner</button>
+</form>
+{% endif %}
+{% endif %}
+
+{% if cycle.status == CycleStatus.submitting and user.is_admin %}
+<form method="post" action="/admin/cycles/{{ cycle.id }}/open-ranking">
+  <button type="submit">lock submissions, start ranking</button>
+</form>
+{% endif %}
+
+{% endblock %}

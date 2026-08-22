@@ -1,0 +1,37 @@
+<div class="picker" id="search-results">
+  <div class="picker-list">
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    {% for m in results %}
+    <button type="button"
+            class="search-hit {% if m.imdb_id == selected_id %}selected{% endif %}"
+            hx-get="/partials/search"
+            hx-vals='{"q": "{{ q }}", "selected": "{{ m.imdb_id }}"}'
+            hx-target="#search-results"
+            hx-swap="outerHTML">
+      <span class="hit-title">{{ m.title }} <span class="dim">({{ m.year }})</span></span>
+    </button>
+    {% else %}
+      {% if q|length >= 2 %}<p class="dim">no matches.</p>{% endif %}
+    {% endfor %}
+  </div>
+  <div class="preview-pane">
+    {% if preview %}
+      {% if preview.poster_url %}
+        <img src="{{ preview.poster_url }}" alt="{{ preview.title }} poster">
+      {% else %}
+        <div class="no-poster">no poster</div>
+      {% endif %}
+      <h3>{{ preview.title }} ({{ preview.year }})</h3>
+      {% if preview.plot %}<p class="plot">{{ preview.plot }}</p>{% endif %}
+      {% if cycle_id %}
+      <form hx-post="/cycles/{{ cycle_id }}/submissions" hx-target="#submit-status" hx-swap="innerHTML">
+        <input type="hidden" name="imdb_id" value="{{ preview.imdb_id }}">
+        <button type="submit">pick this film</button>
+      </form>
+      <div id="submit-status"></div>
+      {% endif %}
+    {% else %}
+      <p class="dim">select a film to preview it.</p>
+    {% endif %}
+  </div>
+</div>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}movie club{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/theme.css" />
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  </head>
+  <body>
+    <div class="crt"></div>
+    {% if user %}
+    <nav>
+      <span class="logo">movie club</span>
+      <span class="nav-links">
+        <a href="/">cycle</a>
+        <a href="/leaderboard">leaderboard</a>
+        <span class="dim">{{ user.name }}</span>
+        <form method="post" action="/logout" class="inline">
+          <button type="submit" class="linklike">logout</button>
+        </form>
+      </span>
+    </nav>
+    {% endif %}
+    <main>{% block content %}{% endblock %}</main>
+  </body>
+</html>

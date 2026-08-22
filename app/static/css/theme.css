@@ -1,0 +1,349 @@
+/* MOVIE CLUB — matrix lofi cinema */
+
+:root {
+  --bg: #030603;
+  --panel: #071108;
+  --green: #00ff40;
+  --green-dim: #1a8f37;
+  --green-dark: #0d3f1c;
+  --text: #b8ffc9;
+  --danger: #ff5555;
+  --mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  min-height: 100vh;
+}
+
+/* CRT scanlines + vignette */
+.crt {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 255, 65, 0.035) 0px,
+      rgba(0, 255, 65, 0.035) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(
+      ellipse at center,
+      transparent 55%,
+      rgba(0, 0, 0, 0.55) 100%
+    );
+}
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+a {
+  color: var(--green);
+}
+a:hover {
+  text-shadow: 0 0 6px var(--green);
+}
+
+h1,
+h2,
+h3 {
+  color: var(--green);
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+  font-weight: 600;
+}
+h1 {
+  font-size: 1.25rem;
+}
+h2 {
+  font-size: 1rem;
+}
+h3 {
+  font-size: 0.95em;
+}
+
+.dim {
+  color: var(--green-dim);
+  font-size: 0.85em;
+}
+.error {
+  color: var(--danger);
+  text-shadow: 0 0 6px rgba(255, 85, 85, 0.5);
+}
+.ok {
+  color: var(--green);
+}
+
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--green-dark);
+  background: rgba(3, 10, 5, 0.9);
+}
+.logo {
+  color: var(--green);
+}
+.nav-links {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.inline {
+  display: inline;
+}
+
+button,
+input {
+  font-family: var(--mono);
+  font-size: 0.95em;
+  background: var(--panel);
+  border: 1px solid var(--green-dim);
+  color: var(--text);
+  padding: 0.45rem 0.7rem;
+}
+button {
+  cursor: pointer;
+  color: var(--green);
+  border-color: var(--green-dim);
+  transition: box-shadow 0.15s;
+}
+button:hover:not(:disabled) {
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.35);
+  border-color: var(--green);
+}
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+button.danger {
+  color: var(--danger);
+  border-color: #6b2020;
+}
+button.danger:hover {
+  box-shadow: 0 0 10px rgba(255, 85, 85, 0.35);
+  border-color: var(--danger);
+}
+
+.linklike {
+  background: none;
+  border: none;
+  padding: 0.1rem 0.2rem;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 8px rgba(0, 255, 65, 0.3);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--green-dark);
+  padding: 1rem 1.25rem;
+  margin: 1.25rem 0;
+}
+
+.cycle-head h1 {
+  margin-bottom: 0.2rem;
+}
+.phase {
+  color: var(--green-dim);
+}
+
+.winner-banner {
+  text-align: center;
+  border: 1px solid var(--green);
+  box-shadow:
+    0 0 18px rgba(0, 255, 65, 0.25),
+    inset 0 0 24px rgba(0, 255, 65, 0.06);
+  padding: 1.25rem;
+  margin: 1.5rem 0;
+}
+.win-title {
+  font-size: 1.1em;
+  color: var(--green);
+  margin: 0.4rem 0;
+}
+
+.posters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+.poster-card {
+  border: 1px solid var(--green-dark);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+}
+.poster-card img {
+  width: 100%;
+  filter: grayscale(35%) sepia(20%) hue-rotate(60deg) brightness(0.85);
+  border: 1px solid var(--green-dark);
+  margin-bottom: 0.5rem;
+}
+.poster-card:hover img {
+  filter: grayscale(0%) brightness(1);
+}
+.no-poster {
+  height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--green-dark);
+  color: var(--green-dark);
+  margin-bottom: 0.5rem;
+}
+.poster-card h3 {
+  font-size: 0.95em;
+  margin: 0.2rem 0;
+}
+.plot {
+  font-size: 0.78em;
+  color: var(--green-dim);
+}
+
+.picker {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+@media (max-width: 640px) {
+  .picker {
+    grid-template-columns: 1fr;
+  }
+}
+.picker-list {
+  min-width: 0;
+}
+
+.search-hit {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 1rem;
+  border: 1px solid transparent;
+  border-bottom: 1px solid var(--green-dark);
+  background: none;
+  color: var(--text);
+  font-family: var(--mono);
+  text-align: left;
+  padding: 0.45rem 0.2rem;
+  cursor: pointer;
+}
+.search-hit:hover:not(.selected) {
+  border-color: var(--green-dim);
+}
+.search-hit.selected {
+  border: 1px solid var(--green);
+  background: rgba(0, 255, 65, 0.06);
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.25);
+  color: var(--green);
+}
+
+.preview-pane {
+  border: 1px solid var(--green-dark);
+  background: var(--panel);
+  padding: 0.6rem;
+  align-self: start;
+}
+.preview-pane img {
+  width: 100%;
+  filter: grayscale(35%) sepia(20%) hue-rotate(60deg) brightness(0.85);
+  border: 1px solid var(--green-dark);
+  margin-bottom: 0.5rem;
+}
+.preview-pane h3 {
+  margin: 0.2rem 0;
+}
+
+.rank-list {
+  list-style: none;
+  padding-left: 0;
+  max-width: 480px;
+}
+.rank-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--green-dark);
+  background: rgba(0, 0, 0, 0.35);
+  margin-bottom: 0.4rem;
+  padding: 0.45rem 0.7rem;
+}
+.rank-pos {
+  color: var(--green);
+  min-width: 2.4em;
+}
+.rank-title {
+  flex: 1;
+}
+.rank-controls button {
+  padding: 0 0.4rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+}
+th,
+td {
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border-bottom: 1px solid var(--green-dark);
+}
+th {
+  color: var(--green);
+}
+tr.top td {
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.6);
+  color: var(--green);
+}
+
+.auth-box {
+  max-width: 380px;
+  margin: 12vh auto 0;
+  background: var(--panel);
+  border: 1px solid var(--green-dark);
+  padding: 1.5rem 1.75rem 2rem;
+}
+.auth-box form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.auth-box label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  color: var(--green-dim);
+}
+.auth-box button {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+}

@@ -1,0 +1,22 @@
+<div id="ballot">
+  {% if abstained %}
+  <p class="dim">you abstained this month.</p>
+  {% elif rankings %}
+  <ol class="rank-list">
+    {% for r in rankings %}
+    <li>
+      <span class="rank-pos">#{{ loop.index }}</span>
+      <span class="rank-title">{{ r.submission.title }}</span>
+      <span class="rank-controls">
+        <button class="linklike" {% if loop.first %}disabled{% endif %}
+                hx-post="/cycles/{{ cycle_id }}/ranking/{{ r.submission_id }}/move?dir=up"
+                hx-target="#ballot">&#9650;</button>
+        <button class="linklike" {% if loop.last %}disabled{% endif %}
+                hx-post="/cycles/{{ cycle_id }}/ranking/{{ r.submission_id }}/move?dir=down"
+                hx-target="#ballot">&#9660;</button>
+      </span>
+    </li>
+    {% endfor %}
+  </ol>
+  {% endif %}
+</div>
