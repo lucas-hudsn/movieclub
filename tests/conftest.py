@@ -65,3 +65,19 @@ def omdb_mock(monkeypatch):
 
 def register(client, email, name="op"):
     return client.post("/register", data={"email": email, "name": name, "password": "hunter2222"})
+
+
+def create_team(client, name="the crew"):
+    return client.post("/teams", data={"name": name})
+
+
+def team_invite_code(db):
+    from sqlalchemy import select
+
+    from app.models import Team
+
+    return db.scalars(select(Team)).first().invite_code
+
+
+def join_team(client, code):
+    return client.post("/teams/join", data={"code": code})

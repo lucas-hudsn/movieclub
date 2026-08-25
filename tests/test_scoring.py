@@ -1,11 +1,21 @@
-from app.models import Cycle, CycleStatus, Ranking, Submission, User
-from app.services.scoring import close_cycle, tally
+from app.models import Cycle, CycleStatus, Ranking, Submission, Team, User
+from app.services.scoring import close_cycle, eviction_count, tally
 
 
-def _mk(db):
-    cycle = Cycle(period="2026-01")
-    users = [User(email=f"u{i}@x.io", name=f"u{i}", password_hash="h") for i in range(3)]
-    db.add_all([cycle, *users])
+def _mk(db, n_users=3, tag=""):
+    users = [
+        User(email=f"u{i}{tag}@x.io", name=f"u{i}", password_hash="h")
+        for i in range(n_users)
+    ]
+    db.add_all(users)
+    db.flush()
+    team = Team(name="crew", invite_code=f"code123{tag}", created_by_id=users[0].id)
+    db.add(team)
+    db.flush()
+    for u in users:
+        u.team_id = team.id
+    cycle = Cycle(team_id=team.id, period="2026-01")
+    db.add(cycle)
     db.commit()
 
     subs = [
@@ -54,7 +64,46 @@ def test_close_cycle_crowns_winner_and_loser(db):
         db.add(Ranking(cycle_id=cycle.id, user_id=users[0].id, submission_id=sub.id, position=pos, ballot_active=True))
     db.commit()
 
-    winner, loser = close_cycle(cycle, db)
+    winner, losers = close_cycle(cycle, db)
     assert cycle.status == CycleStatus.closed
     assert winner is subs[2]
-    assert loser is subs[0]
+    # 3-member team: everyone stays in
+    assert losers == []
+    assert cycle.loser_submission_id is None
+
+
+def test_five_member_team_evicts_one(db):
+    cycle, users, subs = _mk(db, n_users=5)
+    assert eviction_count(cycle.team_id, db) == 1
+
+    # worst ballot for u4's film; u0 ranks their own best
+    order = [subs[0], subs[1], subs[2], subs[3], subs[4]]
+    for pos, sub in enumerate(order, start=1):
+        db.add(Ranking(cycle_id=cycle.id, user_id=users[0].id, submission_id=sub.id, position=pos, ballot_active=True))
+    db.commit()
+
+    winner, losers = close_cycle(cycle, db)
+    assert winner is subs[0]
+    assert losers == [subs[4]]
+    assert cycle.loser_submission_id == subs[4].id
+
+
+def test_six_member_team_evicts_two(db):
+    cycle, users, subs = _mk(db, n_users=6)
+    assert eviction_count(cycle.team_id, db) == 2
+
+    order = [subs[0], subs[1], subs[2], subs[3], subs[5], subs[4]]
+    for pos, sub in enumerate(order, start=1):
+        db.add(Ranking(cycle_id=cycle.id, user_id=users[0].id, submission_id=sub.id, position=pos, ballot_active=True))
+    db.commit()
+
+    winner, losers = close_cycle(cycle, db)
+    assert winner is subs[0]
+    # two bottom films sit out next cycle, worst first
+    assert losers == [subs[4], subs[5]]
+
+
+def test_eviction_count_by_team_size(db):
+    for size, expected in [(1, 0), (3, 0), (4, 0), (5, 1), (6, 2)]:
+        cycle, users, subs = _mk(db, n_users=size, tag=f"s{size}")
+        assert eviction_count(cycle.team_id, db) == expected

@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Cycle, CycleStatus, User
+from app.models import Cycle, CycleStatus, Team, User
 from app.security import COOKIE_NAME, read_session_token
 
 
@@ -26,6 +26,11 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def is_team_admin(user: User, team: Team) -> bool:
+    """The team creator runs the team; global admins are a superuser fallback."""
+    return user.is_admin or team.created_by_id == user.id
+
+
 def get_open_cycle(db: Session = Depends(get_db)) -> Cycle:
     cycle = db.scalars(
         select(Cycle)
@@ -36,3 +41,10 @@ def get_open_cycle(db: Session = Depends(get_db)) -> Cycle:
     if cycle is None:
         raise HTTPException(status_code=404, detail="no active cycle")
     return cycle
+
+
+def get_current_team(user: User = Depends(get_current_user)) -> Team:
+    """Every signed-in user must belong to a team; onboarding lives at /teams/onboard."""
+    if user.team_id is None:
+        raise HTTPException(status_code=303, headers={"Location": "/teams/onboard"})
+    return user.team

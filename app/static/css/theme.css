@@ -347,3 +347,93 @@ tr.top td {
   align-self: flex-start;
   margin-top: 0.4rem;
 }
+
+/* homepage: four-panel layout */
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: stretch;
+}
+.home-grid > .panel {
+  margin: 0;
+  min-width: 0;
+}
+.home-actions {
+  display: flex;
+  flex-direction: column;
+}
+.my-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+.my-pick p {
+  margin: 0;
+}
+@media (max-width: 760px) {
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.month-badge {
+  position: fixed;
+  top: 3.2rem;
+  right: 1rem;
+  z-index: 10;
+  border: 1px solid var(--green-dim);
+  background: rgba(3, 10, 5, 0.9);
+  color: var(--green);
+  padding: 0.35rem 0.8rem;
+  box-shadow: 0 0 12px rgba(0, 255, 65, 0.2);
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+}
+
+.preview-hero {
+  margin-top: 0.5rem;
+}
+.preview-body {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 1rem;
+}
+@media (max-width: 640px) {
+  .preview-body {
+    grid-template-columns: 1fr;
+  }
+}
+.preview-poster img {
+  width: 100%;
+  filter: grayscale(35%) sepia(20%) hue-rotate(60deg) brightness(0.85);
+  border: 1px solid var(--green-dark);
+}
+.preview-meta h3 {
+  margin: 0 0 0.2rem;
+}
+.preview-meta p {
+  margin: 0.3rem 0;
+}
+.preview-empty {
+  text-align: center;
+  padding-top: 0.5rem;
+}
+#preview .no-poster {
+  margin-bottom: 0;
+}
+
+.film-select {
+  margin-top: 0.75rem;
+}
+
+.invite-code {
+  font-size: 1.4rem;
+  letter-spacing: 0.2rem;
+  color: var(--green);
+  border: 1px dashed var(--green-dark);
+  padding: 0.4rem 0.8rem;
+}
+.danger-link {
+  color: #ff5555;
+}

@@ -21,8 +21,8 @@ Server-rendered FastAPI + Jinja2 + HTMX. There is no SPA, no REST API to speak o
 
 - **Flow of control:** browser → router (`app/routers/`) → SQLAlchemy models (`app/models.py`) → template or redirect.
 - **Auth:** signed cookie (`movieclub_session`) via `itsdangerous`; guards live in `app/dependencies.py`. Unauthenticated requests raise `HTTPException(303, Location=/login)`, converted to redirects in `app/main.py`.
-- **Cycle lifecycle:** `submitting → ranking → closed` (`CycleStatus`). Only admins advance phases (`/admin/cycles/{id}/open-ranking|close`). Closing tallies Borda points (`app/services/scoring.py`), records winner/loser, and auto-creates next month's cycle with the loser's submitter banned from submitting.
-- **OMDB:** all external calls go through `app/services/omdb.py`. Never call httpx elsewhere. Results are cached onto the `Submission` row at creation time.
+- **Cycle lifecycle:** `submitting → ranking → closed` (`CycleStatus`). Only admins advance phases (`/admin/cycles/{id}/open-ranking|close`). Closing tallies Borda points (`app/services/scoring.py`), records winner/loser, and auto-creates next month's cycle. Evictions depend on team size (`eviction_count`): teams of ≤4 evict nobody, 5 evict the last-place submitter, 6 evict the bottom two. Teams are capped at `MAX_TEAM_SIZE` (6) members. Bans live in the `cycle_bans` table (`Cycle.banned_users`).
+- **OMDB:** all external calls go through `app/services/omdb.py`. Never call httpx elsewhere. Results are cached onto the `Submission` row at creation time.    
 - **Rankings:** one `Ranking` row per (cycle, user, submission). Ballots are only tallied when `ballot_active=True` (set when the user moves anything); abstainers keep inactive default-order rows.
 
 ## Conventions

@@ -84,3 +84,26 @@ uv run alembic upgrade head                       # apply migrations
 uv run pytest                                     # test suite
 docker compose up -d db                           # start database
 ```
+
+## Deployment (FastAPI Cloud + Supabase)
+
+The app is deployed on [FastAPI Cloud](https://fastapicloud.com) with the database hosted on Supabase Postgres (app auth stays as-is; Supabase is used purely as the Postgres host).
+
+1. **Connect Supabase to FastAPI Cloud** — Team settings → Integrations → connect Supabase. Then on your app's Integrations tab, pick your Supabase project and enter its DB password. FastAPI Cloud injects a `DATABASE_URL` secret automatically.
+2. **Set remaining env vars** — `SECRET_KEY` (as a secret) and `OMDB_API_KEY`:
+   ```bash
+   fastapi cloud env set --secret SECRET_KEY "..."
+   fastapi cloud env set OMDB_API_KEY "..."
+   ```
+   The app normalizes `DATABASE_URL` itself (`postgresql://` → `postgresql+psycopg://`, adds `sslmode=require`), so the injected value works unchanged.
+3. **Migrate the database** — migrations are not run automatically on deploy, so apply them against Supabase before/alongside deploying:
+   ```bash
+   DATABASE_URL="postgresql+psycopg://...supabase..." uv run alembic upgrade head
+   ```
+4. **Deploy**:
+   ```bash
+   uv run fastapi login    # first time only
+   uv run fastapi deploy   # entrypoint app/main.py:app is auto-detected
+   ```
+
+Remember: when adding columns, migrate **before** deploying; when removing them, deploy first and migrate after (zero-downtime gradual deployments mean old and new code run side by side).

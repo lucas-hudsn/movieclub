@@ -15,6 +15,7 @@
       <span class="nav-links">
         <a href="/">cycle</a>
         <a href="/leaderboard">leaderboard</a>
+        {% if user.team_id %}<a href="/team">my team</a>{% endif %}
         <span class="dim">{{ user.name }}</span>
         <form method="post" action="/logout" class="inline">
           <button type="submit" class="linklike">logout</button>

@@ -3,7 +3,7 @@ name = "movieclub"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = "==3.13.*"
 dependencies = [
     "alembic>=1.19.1",
     "argon2-cffi>=25.1.0",
@@ -21,6 +21,9 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.fastapi]
+entrypoint = "app.main:app"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

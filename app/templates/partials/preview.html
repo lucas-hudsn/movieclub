@@ -1,0 +1,21 @@
+{% if submission %}
+<div class="preview-body">
+  <div class="preview-poster">
+    {% if submission.poster_url %}
+      <img src="{{ submission.poster_url }}" alt="{{ submission.title }} poster">
+    {% else %}
+      <div class="no-poster">no signal</div>
+    {% endif %}
+  </div>
+  <div class="preview-meta">
+    <h3>{{ submission.title }}</h3>
+    <p class="dim">{{ submission.year }} &mdash; submitted by {{ submission.user.name }}</p>
+    {% if submission.plot %}<p class="plot">{{ submission.plot }}</p>{% endif %}
+  </div>
+</div>
+{% else %}
+<div class="preview-empty">
+  <div class="no-poster">no movie selected</div>
+  <p class="dim">pick a film from the list to preview it here.</p>
+</div>
+{% endif %}

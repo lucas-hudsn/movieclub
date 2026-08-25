@@ -1,7 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models import Cycle, CycleStatus, Ranking
-from tests.conftest import register
+from tests.conftest import create_team, join_team, register, team_invite_code
 
 
 def test_register_login_and_dashboard(client):
@@ -9,6 +9,10 @@ def test_register_login_and_dashboard(client):
     assert r.status_code == 303
     assert "movieclub_session" in r.cookies
 
+    # no team yet: dashboard sends you to onboarding
+    assert client.get("/").headers["location"] == "/teams/onboard"
+
+    assert create_team(client).status_code == 303
     dash = client.get("/")
     assert dash.status_code == 200
     # month name rendered from period, e.g. "august 2026"
@@ -25,11 +29,12 @@ def test_register_login_and_dashboard(client):
 
 def test_first_user_is_admin(client):
     register(client, "a@x.io")
+    create_team(client)
     assert "lock submissions, start ranking" in client.get("/").text
 
     client.post("/logout")
     register(client, "b@x.io")
-    assert "lock submissions, start ranking" not in client.get("/").text
+    assert client.get("/").headers["location"] == "/teams/onboard"
 
 
 def test_unauthenticated_redirects_to_login(client):
@@ -40,6 +45,7 @@ def test_unauthenticated_redirects_to_login(client):
 
 def test_search_selection_shows_preview(client, omdb_mock):
     register(client, "a@x.io")
+    create_team(client)
     client.get("/")  # lazily create the current cycle
 
     # no selection: list only, no preview pane content
@@ -59,6 +65,7 @@ def test_search_selection_shows_preview(client, omdb_mock):
 
 def test_htmx_submission_redirects_via_hx_header(client, db, omdb_mock):
     register(client, "a@x.io")
+    create_team(client)
     client.get("/")
     cycle = db.scalars(select(Cycle)).first()
 
@@ -80,17 +87,104 @@ def test_htmx_submission_redirects_via_hx_header(client, db, omdb_mock):
     assert "you already submitted" in resp.text
 
 
-def test_full_cycle_flow(client, db, omdb_mock):
-    # Admin registers first (becomes admin); dashboard lazily creates the current cycle
+def test_remove_and_lock_in_submission(client, db, omdb_mock):
+    from app.models import Submission
+
     register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cycle = db.scalars(select(Cycle)).first()
+    cid = cycle.id
+
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+    sub = db.scalars(select(Submission)).first()
+
+    # a member joins but hasn't picked yet; admin's pick is unlocked, so removable
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+
+    # member cannot remove someone else's submission
+    assert client.post(f"/submissions/{sub.id}/delete").status_code == 404
+
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+    resp = client.post(f"/submissions/{sub.id}/delete", headers={"HX-Request": "true"})
+    assert resp.status_code == 204
+    assert resp.headers["hx-redirect"] == "/"
+    assert db.scalars(select(Submission)).first() is None
+
+    # re-pick and lock in: removal blocked even though others haven't picked
+    client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"})
+    sub = db.scalars(select(Submission).where(Submission.user_id == 1)).first()
+    assert client.post(f"/submissions/{sub.id}/lock").status_code == 303
+    resp = client.post(
+        f"/submissions/{sub.id}/delete",
+        headers={"HX-Request": "true"},
+    )
+    assert resp.status_code == 200
+    assert "locked in" in resp.text
+    assert db.get(Submission, sub.id) is not None
+
+    # locking again is rejected
+    resp = client.post(f"/submissions/{sub.id}/lock", headers={"HX-Request": "true"})
+    assert resp.status_code == 200
+    assert "already locked in" in resp.text
+
+    # once ranking opens, everything stays blocked
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+    client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0110912"})
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+    assert client.post(f"/admin/cycles/{cid}/open-ranking").status_code == 303
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+    member_sub = db.scalars(select(Submission).where(Submission.user_id == 2)).first()
+    assert client.post(f"/submissions/{member_sub.id}/delete").status_code == 400
+    assert client.post(f"/submissions/{member_sub.id}/lock").status_code == 400
+
+
+def test_team_page_shows_banner_but_no_pick_controls(client, db, omdb_mock):
+    from app.models import Submission
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cycle = db.scalars(select(Cycle)).first()
+    cid = cycle.id
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+    sub = db.scalars(select(Submission).where(Submission.user_id == 1)).first()
+
+    # banner shows on the team page, but pick/lock/remove controls live only on the cycle page
+    team_page = client.get("/team").text
+    assert "month-badge" in team_page
+    assert "remove my film" not in team_page
+    assert "/lock" not in team_page
+    cycle_page = client.get("/").text
+    assert "remove my film" in cycle_page
+
+    # locked in: still nothing on the team page
+    assert client.post(f"/submissions/{sub.id}/lock").status_code == 303
+    team_page = client.get("/team").text
+    assert "locked in" not in team_page
+
+
+def test_full_cycle_flow(client, db, omdb_mock):
+    # Admin registers first (becomes admin), creates the team; dashboard lazily creates the current cycle
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
     assert client.get("/").status_code == 200
     cycle = db.scalars(select(Cycle)).first()
     cid = cycle.id
     assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
     assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt1375666"}).status_code == 400  # one per user
 
-    # Member registers (takes over cookie), submits Pulp Fiction
+    # Member registers and joins via invite code, submits Pulp Fiction
+    code = team_invite_code(db)
     register(client, "member@x.io", "Member")
+    assert join_team(client, code).status_code == 303
     assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0110912"}).status_code == 303
     assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 400  # dupe movie
 
@@ -124,16 +218,40 @@ def test_full_cycle_flow(client, db, omdb_mock):
     assert len(cycles) == 2
     next_cycle = cycles[-1]
 
-    from app.models import Submission
-    loser_sub = db.get(Submission, cycle.loser_submission_id)
-    assert next_cycle.banned_user_id == loser_sub.user_id
+    # 2-member team: everyone stays in, nobody is banned
+    db.refresh(next_cycle)
+    assert next_cycle.banned_users == []
+    assert cycle.loser_submission_id is None
 
-    # Loser cannot submit in the new cycle
+    # so members can still submit in the new cycle
     client.post("/logout")
-    loser_email = "admin@x.io" if loser_sub.user_id == 1 else "member@x.io"
-    client.post("/login", data={"email": loser_email, "password": "hunter2222"})
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
     resp = client.post(f"/cycles/{next_cycle.id}/submissions", data={"imdb_id": "tt1375666"})
-    assert resp.status_code == 403
+    assert resp.status_code == 303
 
     lb = client.get("/leaderboard")
     assert lb.status_code == 200
+
+
+def test_team_join_capped_at_six(client, db):
+    from app.models import User
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    code = team_invite_code(db)
+
+    for i in range(5):  # fills the team up to 6 members
+        email = f"m{i}@x.io"
+        register(client, email)
+        assert join_team(client, code).status_code == 303
+
+    member_count = db.scalar(select(func.count()).select_from(User))
+    assert member_count == 6
+
+    # 7th user gets bounced
+    register(client, "late@x.io", "Late")
+    resp = join_team(client, code)
+    assert resp.status_code == 200
+    assert "capped at 6" in resp.text
+    late = db.scalar(select(User).where(User.email == "late@x.io"))
+    assert late.team_id is None

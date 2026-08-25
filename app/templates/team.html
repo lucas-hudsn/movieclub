@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ team.name }} // movie club{% endblock %}
+{% block content %}
+<span class="month-badge">{{ cycle.period|month }}</span>
+
+<h1>{{ team.name }}</h1>
+
+<section class="panel">
+  <h2>members ({{ members|length }})</h2>
+  <table>
+    <thead><tr><th>operator</th><th>email</th><th></th></tr></thead>
+    <tbody>
+    {% for m in members %}
+      <tr>
+        <td>{% if m.id == team.created_by_id %}&#9733; {% endif %}{{ m.name }}</td>
+        <td class="dim">{{ m.email }}</td>
+        <td>
+          {% if is_owner and m.id != team.created_by_id %}
+          <form method="post" action="/team/members/{{ m.id }}/remove" class="inline">
+            <button type="submit" class="linklike danger-link">remove</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3" class="dim">nobody here yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <p class="dim">&#9733; = team creator</p>
+</section>
+
+{% if is_owner %}
+<section class="panel">
+  <h2>invite code</h2>
+  <p>share this code &mdash; only people with it can join:</p>
+  <p><code class="invite-code">{{ team.invite_code }}</code></p>
+  <form method="post" action="/team/invite/regenerate">
+    <button type="submit" class="danger">regenerate code (old one stops working)</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

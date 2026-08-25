@@ -1,7 +1,7 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Cycle, CycleStatus, Ranking, Submission
+from app.models import Cycle, CycleStatus, Ranking, Submission, User
 
 
 def tally(cycle: Cycle, db: Session) -> list[dict]:
@@ -41,27 +41,36 @@ def tally(cycle: Cycle, db: Session) -> list[dict]:
     return results
 
 
-def close_cycle(cycle: Cycle, db: Session) -> tuple[Submission | None, Submission | None]:
+def eviction_count(team_id: int, db: Session) -> int:
     """
-    Crown winner (most points) and loser (fewest points). Sets status=closed,
-    records the winner, and returns (winner, loser).
-    Tie-break for last place: fewest firsts, then latest submission wins the dishonour.
+    How many members sit out the next cycle: everyone stays in for teams of
+    4 or fewer; 5-member teams evict 1, 6-member teams evict 2.
+    """
+    members = db.scalar(select(func.count()).select_from(User).where(User.team_id == team_id))
+    return max(0, min(members - 4, 2))
+
+
+def close_cycle(cycle: Cycle, db: Session) -> tuple[Submission | None, list[Submission]]:
+    """
+    Crown winner (most points) and the last-place submission(s). Sets
+    status=closed and records the winner/loser. How many bottom submissions
+    count as losers depends on team size (see eviction_count).
+    Tie-break: fewest firsts, then latest submission wins the dishonour.
     """
     results = tally(cycle, db)
     if not results:
         cycle.status = CycleStatus.closed
-        return None, None
+        return None, []
 
     winner = results[0]["submission"]
-    loser = min(
+    ordered = sorted(
         results,
         key=lambda r: (r["points"], r["firsts"], -r["submission"].created_at.timestamp()),
-    )["submission"]
+    )
+    n_losers = min(eviction_count(cycle.team_id, db), len(ordered) - 1)
+    losers = [row["submission"] for row in ordered[:n_losers]]
 
     cycle.status = CycleStatus.closed
     cycle.winner_submission_id = winner.id
-    if loser is not winner:
-        cycle.loser_submission_id = loser.id
-    else:
-        cycle.loser_submission_id = None
-    return winner, loser
+    cycle.loser_submission_id = losers[0].id if losers else None
+    return winner, losers

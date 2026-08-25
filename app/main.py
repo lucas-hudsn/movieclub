@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.routers import auth, cycles, movies, rankings
+from app.routers import auth, cycles, movies, rankings, teams
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -20,7 +20,7 @@ app = FastAPI(title="Movie Club", lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-for router in (auth.router, movies.router, rankings.router, cycles.router):
+for router in (auth.router, movies.router, rankings.router, cycles.router, teams.router):
     app.include_router(router)
 
 

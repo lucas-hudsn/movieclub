@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}join a team // movie club{% endblock %}
+{% block content %}
+<section class="auth-box">
+  <h1>join a team</h1>
+  <p class="dim">you're not part of a team yet. create one, or enter an invite code from a team creator.</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+  <h2>create your own</h2>
+  <form method="post" action="/teams">
+    <label>team name
+      <input type="text" name="name" required autofocus maxlength="80">
+    </label>
+    <button type="submit">create team</button>
+  </form>
+
+  <h2>or join with an invite code</h2>
+  <form method="post" action="/teams/join">
+    <label>invite code
+      <input type="text" name="code" value="{{ code }}" required maxlength="32">
+    </label>
+    <button type="submit">join team</button>
+  </form>
+</section>
+{% endblock %}

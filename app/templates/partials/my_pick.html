@@ -1,0 +1,15 @@
+{% if cycle.status == CycleStatus.submitting and my_submission %}
+  {% if can_unsubmit %}
+  <div class="my-pick">
+    <p class="ok">{{ my_submission.title }} <span class="dim">({{ my_submission.year }})</span></p>
+    <form method="post" action="/submissions/{{ my_submission.id }}/lock">
+      <button type="submit">lock in</button>
+    </form>
+    <form method="post" action="/submissions/{{ my_submission.id }}/delete">
+      <button type="submit" class="linklike danger-link">remove my film</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="ok">your film is locked in for this month.</p>
+  {% endif %}
+{% endif %}
