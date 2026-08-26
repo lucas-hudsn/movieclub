@@ -1,7 +1,9 @@
 # MOVIE CLUB // `▚▚ SIGNAL ACQUIRED ▚▚`
 
+**Live: <https://movieclub.fastapicloud.dev>**
+
 A monthly movie club app for teams: everyone submits a film, everyone watches and ranks,
-the club crowns a monthly winner, and the loser's pick earns their submitter a month
+the club crowns a monthly winner, and the losering pick earns their submitter a month
 on the bench.
 
 ![stack](https://img.shields.io/badge/FastAPI-Jinja2%20%2B%20HTMX-00ff41)
@@ -9,24 +11,27 @@ on the bench.
 ## How a cycle works
 
 1. **SUBMITTING** — each member picks one movie (searched live against [OMDB](https://www.omdbapi.com/)). One pick per person, no duplicate movies.
-2. **RANKING** — an admin locks submissions. Every member orders all films best → worst with ▲▼ controls. Points are awarded by **Borda count**: position 1 of N films gets `N−1` points, last gets `0`. Members can abstain (inactive ballots aren't tallied).
+2. **RANKING** — an admin locks submissions. Every member orders all locked films best → worst with ▲▼ controls on the `/vote` page. Points are awarded by **Borda count**: position 1 of N films gets `N−1` points, last gets `0`. Members can abstain (inactive ballots aren't tallied). Films not yet locked in stay hidden until their submitter finalizes them.
 3. **CLOSED** — the film with the most points wins; the film with the fewest points sends its submitter to the bench: they can still watch and rank next month, but cannot submit. A new cycle starts automatically.
 
 An all-time **leaderboard** tallies wins and losses per member.
 
+Joining is invite-only: the team creator shares a code from `/team`, and nobody gets in without it. The first account registered becomes the admin.
+
 ## Stack
 
-| Layer    | Choice                                                        |
-| -------- | ------------------------------------------------------------- |
-| Backend  | FastAPI, Jinja2 templates, HTMX fragments                      |
-| Database | PostgreSQL (SQLAlchemy 2.0 + Alembic migrations)               |
-| Auth     | Email + password (argon2), signed session cookie               |
-| Movies   | OMDB API (`OMDB_API_KEY` in `.env`)                            |
-| Styling  | Hand-rolled CSS — black / phosphor-green CRT lofi cinema theme |
+| Layer    | Choice                                                             |
+| -------- | ------------------------------------------------------------------ |
+| Hosting  | [FastAPI Cloud](https://fastapicloud.com)                          |
+| Backend  | FastAPI, Jinja2 templates, HTMX fragments                          |
+| Database | PostgreSQL (SQLAlchemy 2.0 + Alembic migrations), Supabase in prod |
+| Auth     | Email + password (argon2), signed session cookie                   |
+| Movies   | OMDB API (`OMDB_API_KEY` env var)                                  |
+| Styling  | Hand-rolled CSS — black / phosphor-green CRT lofi cinema theme     |
 
-## Getting started
+## Local development
 
-Requires Python 3.14+ ([uv](https://docs.astral.sh/uv/)), Docker, and an OMDB API key.
+Requires Python 3.13+ ([uv](https://docs.astral.sh/uv/)), Docker, and an OMDB API key.
 
 ```bash
 # 1. Start Postgres (port 5433 — 5432 is left free for any local instance)
@@ -56,10 +61,10 @@ Tests run against in-memory SQLite; no Docker needed. The full cycle lifecycle i
 
 ```
 app/
-  main.py            app factory, static files, error pages
+  main.py            FastAPI app, static files, error pages
   config.py          pydantic-settings (.env)
   database.py        engine/session
-  models.py          User, Cycle, Submission, Ranking
+  models.py          User, Team, Cycle, Submission, Ranking, …
   security.py        password hashing + session cookies
   dependencies.py    auth guards
   services/
@@ -67,6 +72,7 @@ app/
     scoring.py       Borda tally + winner/loser resolution
   routers/
     auth.py          register/login/logout
+    teams.py         team creation + invite-code joining
     movies.py        search + submission management
     cycles.py        dashboard, phase transitions, leaderboard
     rankings.py      ballot ordering (HTMX)
@@ -83,27 +89,45 @@ uv run alembic revision --autogenerate -m "..."   # new migration after model ch
 uv run alembic upgrade head                       # apply migrations
 uv run pytest                                     # test suite
 docker compose up -d db                           # start database
+uv run fastapi cloud deploy                       # deploy to FastAPI Cloud
 ```
 
 ## Deployment (FastAPI Cloud + Supabase)
 
-The app is deployed on [FastAPI Cloud](https://fastapicloud.com) with the database hosted on Supabase Postgres (app auth stays as-is; Supabase is used purely as the Postgres host).
+The app is deployed on [FastAPI Cloud](https://fastapicloud.com) at
+**<https://movieclub.fastapicloud.dev>**, with the database on Supabase Postgres
+(app auth stays as-is; Supabase is used purely as the Postgres host).
 
-1. **Connect Supabase to FastAPI Cloud** — Team settings → Integrations → connect Supabase. Then on your app's Integrations tab, pick your Supabase project and enter its DB password. FastAPI Cloud injects a `DATABASE_URL` secret automatically.
-2. **Set remaining env vars** — `SECRET_KEY` (as a secret) and `OMDB_API_KEY`:
-   ```bash
-   fastapi cloud env set --secret SECRET_KEY "..."
-   fastapi cloud env set OMDB_API_KEY "..."
-   ```
-   The app normalizes `DATABASE_URL` itself (`postgresql://` → `postgresql+psycopg://`, adds `sslmode=require`), so the injected value works unchanged.
-3. **Migrate the database** — migrations are not run automatically on deploy, so apply them against Supabase before/alongside deploying:
+Current setup, for reference:
+
+1. **App** — `movieclub` on FastAPI Cloud, linked to this repo via `.fastapicloud/cloud.json`.
+   The entrypoint is declared in `pyproject.toml`
+   (`[tool.fastapi] entrypoint = "app.main:app"`).
+2. **Supabase ↔ FastAPI Cloud** — connected via dashboard integrations; FastAPI Cloud
+   injects a `DATABASE_URL` secret. The app normalizes it itself
+   (`postgresql://` → `postgresql+psycopg://`, adds `sslmode=require`).
+3. **Env vars** — `SECRET_KEY` and `OMDB_API_KEY` are set via
+   `fastapi cloud env set`.
+4. **Migrations** — never run automatically on deploy; apply manually:
    ```bash
    DATABASE_URL="postgresql+psycopg://...supabase..." uv run alembic upgrade head
    ```
-4. **Deploy**:
+   (The URL lives only in the FastAPI Cloud dashboard/env secrets.)
+5. **Deploying an update**:
    ```bash
-   uv run fastapi login    # first time only
-   uv run fastapi deploy   # entrypoint app/main.py:app is auto-detected
+   uv run fastapi cloud deploy
    ```
 
 Remember: when adding columns, migrate **before** deploying; when removing them, deploy first and migrate after (zero-downtime gradual deployments mean old and new code run side by side).
+
+### Pending: next deploy
+
+The current working tree (the `/vote` page, per-film locking, ballot improvements) is about to be pushed to FastAPI Cloud. Schema is unchanged — **no migration needed**, just:
+
+```bash
+uv run fastapi cloud deploy
+```
+
+Gotcha: if a build fails with "Installing Python interpreter … os error 2", check the
+app's directory setting (`fastapi cloud apps get`) — it must point at the folder
+containing `pyproject.toml` (here: `.`).

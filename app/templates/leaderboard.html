@@ -3,14 +3,14 @@
 {% block content %}
 <h1>all-time leaderboard</h1>
 <table>
-  <thead><tr><th>rank</th><th>operator</th><th>wins</th><th>losses</th></tr></thead>
+  <thead><tr><th>rank</th><th>operator</th><th>wins</th></tr></thead>
   <tbody>
   {% for row in rows %}
     <tr class="{% if loop.index == 1 %}top{% endif %}">
-      <td>{{ loop.index }}</td><td>{{ row.name }}</td><td>{{ row.wins }}</td><td>{{ row.losses }}</td>
+      <td>{{ loop.index }}</td><td>{{ row.name }}</td><td>{{ row.wins }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="4" class="dim">no cycles completed yet.</td></tr>
+    <tr><td colspan="3" class="dim">no months completed yet.</td></tr>
   {% endfor %}
   </tbody>
 </table>

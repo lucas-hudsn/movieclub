@@ -86,7 +86,7 @@ def add_submission(
 
     cycle = db.get(Cycle, cycle_id)
     if cycle is None or cycle.team_id != user.team_id or cycle.status != CycleStatus.submitting:
-        return reject(400, "submissions are closed for this cycle")
+        return reject(400, "submissions are closed for this month")
     if any(u.id == user.id for u in cycle.banned_users):
         return reject(403, "you are sitting this month out")
 
@@ -94,7 +94,7 @@ def add_submission(
         select(Submission).where(Submission.cycle_id == cycle_id, Submission.user_id == user.id)
     )
     if existing:
-        return reject(400, "you already submitted a movie this cycle")
+        return reject(400, "you already submitted a movie this month")
 
     dupe = db.scalar(select(Submission).where(Submission.cycle_id == cycle_id, Submission.imdb_id == imdb_id))
     if dupe:

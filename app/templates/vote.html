@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}vote // movie club{% endblock %}
+{% block content %}
+
+<span class="month-badge">{{ cycle.period|month }}</span>
+
+<section class="panel">
+  <h2>vote</h2>
+  {% if cycle.status == CycleStatus.closed %}
+    <p class="dim">this month is closed.</p>
+    {% if winner %}
+    <p class="win-title">{{ winner.title }} ({{ winner.year }}) took it.</p>
+    {% endif %}
+    {% if results %}
+    <table>
+      <thead><tr><th>#</th><th>film</th><th>pts</th><th>#1s</th></tr></thead>
+      <tbody>
+      {% for r in results %}
+        <tr><td>{{ loop.index }}</td><td>{{ r.submission.title }}</td><td>{{ r.points }}</td><td>{{ r.firsts }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+  {% elif locked_count == 0 %}
+    <p class="dim">nothing to vote on yet — films show up here once they're locked in.</p>
+  {% else %}
+    {% if pending_count > 0 %}
+    <p class="dim">{{ pending_count }} pick{{ 's' if pending_count != 1 }} still pending &mdash; they'll join the ballot when locked in.</p>
+    {% endif %}
+    <p class="dim">best to worst. #1 gets the most points. move with &#9650;/&#9660;.</p>
+    {% include "partials/ranking.html" %}
+    <form hx-post="/cycles/{{ cycle.id }}/abstain" hx-target="#ballot">
+      <button type="submit" class="linklike dim">abstain</button>
+    </form>
+  {% endif %}
+</section>
+
+{% endblock %}

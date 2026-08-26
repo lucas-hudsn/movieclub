@@ -39,7 +39,7 @@ def get_open_cycle(db: Session = Depends(get_db)) -> Cycle:
         .limit(1)
     ).first()
     if cycle is None:
-        raise HTTPException(status_code=404, detail="no active cycle")
+        raise HTTPException(status_code=404, detail="no active month")
     return cycle
 
 

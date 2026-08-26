@@ -18,5 +18,12 @@
     </li>
     {% endfor %}
   </ol>
+  {% if submitted %}
+  <p class="dim">ballot submitted &mdash; your ranking counts. moving anything un-submits it.</p>
+  {% else %}
+  <form hx-post="/cycles/{{ cycle_id }}/submit-ballot" hx-target="#ballot">
+    <button type="submit">submit ballot</button>
+  </form>
+  {% endif %}
   {% endif %}
 </div>

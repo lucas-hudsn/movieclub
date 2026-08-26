@@ -1,6 +1,6 @@
 from sqlalchemy import func, select
 
-from app.models import Cycle, CycleStatus, Ranking
+from app.models import Cycle, CycleStatus, Ranking, Submission
 from tests.conftest import create_team, join_team, register, team_invite_code
 
 
@@ -30,7 +30,7 @@ def test_register_login_and_dashboard(client):
 def test_first_user_is_admin(client):
     register(client, "a@x.io")
     create_team(client)
-    assert "lock submissions, start ranking" in client.get("/").text
+    assert "start ranking" in client.get("/").text
 
     client.post("/logout")
     register(client, "b@x.io")
@@ -169,6 +169,33 @@ def test_team_page_shows_banner_but_no_pick_controls(client, db, omdb_mock):
     assert client.post(f"/submissions/{sub.id}/lock").status_code == 303
     team_page = client.get("/team").text
     assert "locked in" not in team_page
+
+
+def test_open_ranking_after_visiting_vote_page(client, db, omdb_mock):
+    # visiting /vote during submitting phase creates default ranking rows;
+    # open-ranking must not blow up on the unique constraint
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    assert client.get("/").status_code == 200
+    cid = db.scalars(select(Cycle)).first().id
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+    sub = db.scalars(select(Submission)).first()
+    assert client.post(f"/submissions/{sub.id}/lock").status_code == 303
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    assert join_team(client, code).status_code == 303
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0110912"}).status_code == 303
+
+    # both users peek at /vote while still submitting -> default ballot rows get created
+    assert client.get("/vote").status_code == 200
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+    assert client.get("/vote").status_code == 200
+
+    assert client.post(f"/admin/cycles/{cid}/open-ranking").status_code == 303
+    db.refresh(db.scalars(select(Cycle)).first())
+    rankings = db.scalars(select(Ranking)).all()
+    assert len(rankings) == 4  # 2 movies x 2 users, no duplicates
 
 
 def test_full_cycle_flow(client, db, omdb_mock):

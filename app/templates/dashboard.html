@@ -11,7 +11,7 @@
   <p class="dim">submitted by {{ winner.user.name }}</p>
   {% if losers %}
     {% for l in losers %}
-    <p class="error">last place: {{ l.title }} &mdash; {{ l.user.name }} sits out next cycle.</p>
+    <p class="error">last place: {{ l.title }} &mdash; {{ l.user.name }} sits out next month.</p>
     {% endfor %}
   {% endif %}
 </section>
@@ -27,7 +27,7 @@
               hx-target="#preview"
               hx-swap="innerHTML">
         <span>{{ s.title }}</span>
-        <span class="dim">{{ s.year }} &mdash; {{ s.user.name }}</span>
+        <span class="dim">{{ s.year }}</span>
       </button>
       {% else %}
       <p class="dim">static... no films yet.</p>
@@ -38,14 +38,14 @@
   <section class="panel">
     <h2>leaderboard</h2>
     <table>
-      <thead><tr><th>#</th><th>operator</th><th>w/l</th></tr></thead>
+      <thead><tr><th>#</th><th>operator</th><th>wins</th></tr></thead>
       <tbody>
       {% for row in leaderboard_rows %}
         <tr class="{% if loop.index == 1 %}top{% endif %}">
-          <td>{{ loop.index }}</td><td>{{ row.name }}</td><td>{{ row.wins }}/{{ row.losses }}</td>
+          <td>{{ loop.index }}</td><td>{{ row.name }}</td><td>{{ row.wins }}</td>
         </tr>
       {% else %}
-        <tr><td colspan="3" class="dim">no cycles completed yet.</td></tr>
+        <tr><td colspan="3" class="dim">no months completed yet.</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -66,16 +66,13 @@
 
     {% if cycle.status == CycleStatus.ranking %}
     <h2>rank the films</h2>
-    <p class="dim">best to worst. #1 gets the most points. move with &#9650;/&#9660;.</p>
-    {% include "partials/ranking.html" %}
-    <form hx-post="/cycles/{{ cycle.id }}/abstain" hx-target="#ballot">
-      <button type="submit" class="linklike dim">abstain</button>
-    </form>
+    <p class="dim">voting is open &mdash; head over to cast your ballot.</p>
+    <a href="/vote">go vote &rarr;</a>
     {% endif %}
 
     {% if is_cycle_admin and cycle.status == CycleStatus.submitting %}
     <form method="post" action="/admin/cycles/{{ cycle.id }}/open-ranking">
-      <button type="submit">lock submissions, start ranking</button>
+      <button type="submit">start ranking</button>
     </form>
     {% endif %}
   </section>
@@ -103,7 +100,7 @@
 
 {% if is_cycle_admin %}
 <form method="post" action="/admin/cycles/{{ cycle.id }}/close">
-  <button type="submit" class="danger">close cycle, crown winner</button>
+  <button type="submit" class="danger">close month, crown winner</button>
 </form>
 {% endif %}
 {% endif %}

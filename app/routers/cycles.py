@@ -47,25 +47,14 @@ def _leaderboard_rows(db: Session, team_id: int):
         .group_by(Submission.user_id)
         .subquery()
     )
-    losses_sq = (
-        select(Submission.user_id.label("uid"), func.count().label("losses"))
-        .select_from(Submission)
-        .join(Cycle, Cycle.loser_submission_id == Submission.id)
-        .where(Cycle.team_id == team_id)
-        .group_by(Submission.user_id)
-        .subquery()
-    )
-
     return db.execute(
         select(
             User.name,
             func.coalesce(wins_sq.c.wins, 0).label("wins"),
-            func.coalesce(losses_sq.c.losses, 0).label("losses"),
         )
         .where(User.team_id == team_id)
         .outerjoin(wins_sq, wins_sq.c.uid == User.id)
-        .outerjoin(losses_sq, losses_sq.c.uid == User.id)
-        .order_by(func.coalesce(wins_sq.c.wins, 0).desc(), func.coalesce(losses_sq.c.losses, 0), User.name)
+        .order_by(func.coalesce(wins_sq.c.wins, 0).desc(), User.name)
     ).all()
 
 
@@ -166,11 +155,11 @@ def open_ranking(
 ):
     cycle = db.get(Cycle, cycle_id)
     if cycle is None or user.team_id != cycle.team_id:
-        raise HTTPException(status_code=404, detail="cycle not found")
+        raise HTTPException(status_code=404, detail="month not found")
     if not is_team_admin(user, db.get(Team, cycle.team_id)):
         raise HTTPException(status_code=403, detail="only the team creator can start ranking")
     if cycle.status != CycleStatus.submitting:
-        raise HTTPException(status_code=400, detail="cycle not open for submissions")
+        raise HTTPException(status_code=400, detail="month not open for submissions")
 
     submissions = db.scalars(
         select(Submission).where(Submission.cycle_id == cycle.id).order_by(Submission.created_at)
@@ -179,8 +168,14 @@ def open_ranking(
         raise HTTPException(status_code=400, detail="need at least 2 movies to start ranking")
 
     members = db.scalars(select(User).where(User.team_id == cycle.team_id)).all()
+    existing = {
+        (r.user_id, r.submission_id)
+        for r in db.scalars(select(Ranking).where(Ranking.cycle_id == cycle.id)).all()
+    }
     for u in members:
         for pos, sub in enumerate(submissions, start=1):
+            if (u.id, sub.id) in existing:
+                continue
             db.add(
                 Ranking(
                     cycle_id=cycle.id,
@@ -192,7 +187,7 @@ def open_ranking(
             )
     cycle.status = CycleStatus.ranking
     db.commit()
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/vote", status_code=303)
 
 
 @router.post("/admin/cycles/{cycle_id}/close")
@@ -203,9 +198,9 @@ def close(
 ):
     cycle = db.get(Cycle, cycle_id)
     if cycle is None or user.team_id != cycle.team_id:
-        raise HTTPException(status_code=404, detail="cycle not found")
+        raise HTTPException(status_code=404, detail="month not found")
     if not is_team_admin(user, db.get(Team, cycle.team_id)):
-        raise HTTPException(status_code=403, detail="only the team creator can close the cycle")
+        raise HTTPException(status_code=403, detail="only the team creator can close the month")
     if cycle.status != CycleStatus.ranking:
         raise HTTPException(status_code=400, detail="ranking is not open")
 
