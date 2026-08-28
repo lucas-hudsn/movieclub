@@ -30,7 +30,7 @@ def test_register_login_and_dashboard(client):
 def test_first_user_is_admin(client):
     register(client, "a@x.io")
     create_team(client)
-    assert "start ranking" in client.get("/").text
+    assert "lock submissions" in client.get("/").text
 
     client.post("/logout")
     register(client, "b@x.io")

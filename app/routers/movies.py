@@ -89,6 +89,8 @@ def add_submission(
         return reject(400, "submissions are closed for this month")
     if any(u.id == user.id for u in cycle.banned_users):
         return reject(403, "you are sitting this month out")
+    if cycle.submissions_locked:
+        return reject(400, "submissions are locked for this month")
 
     existing = db.scalar(
         select(Submission).where(Submission.cycle_id == cycle_id, Submission.user_id == user.id)

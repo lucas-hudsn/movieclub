@@ -33,8 +33,8 @@ The app and database split across two free-tier-friendly services. No servers to
 4. **Deploy**:
    - [x] Live at **<https://movieclub.fastapicloud.dev>**
 5. **Bootstrap the club**
-   - [ ] Register yourself → you're global admin → create the team
-   - [ ] Share the invite code from `/team` — nobody else can get in without it
+   - [x] Register yourself → you're global admin → create the team
+   - [x] Share the invite code from `/team` — nobody else can get in without it
 
 **Total: $0 until friends actually use it.** Stop here; the club is live.
 

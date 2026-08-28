@@ -10,8 +10,8 @@ on the bench.
 
 ## How a cycle works
 
-1. **SUBMITTING** — each member picks one movie (searched live against [OMDB](https://www.omdbapi.com/)). One pick per person, no duplicate movies.
-2. **RANKING** — an admin locks submissions. Every member orders all locked films best → worst with ▲▼ controls on the `/vote` page. Points are awarded by **Borda count**: position 1 of N films gets `N−1` points, last gets `0`. Members can abstain (inactive ballots aren't tallied). Films not yet locked in stay hidden until their submitter finalizes them.
+1. **SUBMITTING** — each member picks one movie (searched live against [OMDB](https://www.omdbapi.com/)). One pick per person, no duplicate movies. An admin must **lock submissions** (requires the minimum submissions: min of 4 and team size) before ranking can start.
+2. **RANKING** — an admin starts ranking after locking. Every member orders all locked films best → worst with ▲▼ controls on the `/vote` page. Points are awarded by **Borda count**: position 1 of N films gets `N−1` points, last gets `0`. Members can abstain (inactive ballots aren't tallied). Admins can **reopen submissions** to return to the submitting phase (clears all votes).
 3. **CLOSED** — the film with the most points wins; the film with the fewest points sends its submitter to the bench: they can still watch and rank next month, but cannot submit. A new cycle starts automatically.
 
 An all-time **leaderboard** tallies wins and losses per member.

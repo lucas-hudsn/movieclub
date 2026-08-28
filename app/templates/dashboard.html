@@ -19,7 +19,7 @@
 
 <div class="home-grid">
   <section class="panel">
-    <h2>select a film ({{ submissions|length }})</h2>
+    <h2>select a film ({{ submissions_count }}/{{ max_submissions }})</h2>
     <div class="film-select">
       {% for s in submissions %}
       <button type="button" class="search-hit"
@@ -33,6 +33,12 @@
       <p class="dim">static... no films yet.</p>
       {% endfor %}
     </div>
+    {% if cycle.status == CycleStatus.submitting %}
+    <p class="dim">max {{ max_submissions }} submissions (min of 4 and team size)</p>
+    {% if submissions_locked %}
+    <p class="ok">submissions are locked</p>
+    {% endif %}
+    {% endif %}
   </section>
 
   <section class="panel">
@@ -62,6 +68,8 @@
     <p class="error">you lost last month, so you can rank but not submit this month.</p>
     {% elif cycle.status == CycleStatus.submitting and my_submission %}
     {% include "partials/my_pick.html" %}
+    {% elif cycle.status == CycleStatus.submitting and submissions_locked and not my_submission %}
+    <p class="dim">submissions are locked for this month.</p>
     {% endif %}
 
     {% if cycle.status == CycleStatus.ranking %}
@@ -71,8 +79,24 @@
     {% endif %}
 
     {% if is_cycle_admin and cycle.status == CycleStatus.submitting %}
+    {% if cycle.submissions_locked %}
     <form method="post" action="/admin/cycles/{{ cycle.id }}/open-ranking">
       <button type="submit">start ranking</button>
+    </form>
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/unlock-submissions">
+      <button type="submit">unlock submissions</button>
+    </form>
+    {% else %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/lock-submissions">
+      <button type="submit">lock submissions ({{ submissions_count }}/{{ max_submissions }})</button>
+    </form>
+    {% endif %}
+    {% endif %}
+
+    {% if is_cycle_admin and cycle.status == CycleStatus.ranking %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/reopen-submissions"
+          onsubmit="return confirm('This will clear all votes. Reopen submissions?')">
+      <button type="submit" class="danger">reopen submissions</button>
     </form>
     {% endif %}
   </section>

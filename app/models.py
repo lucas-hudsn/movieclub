@@ -83,6 +83,7 @@ class Cycle(Base):
     loser_submission_id: Mapped[int | None] = mapped_column(
         ForeignKey("submissions.id", use_alter=True), nullable=True
     )
+    submissions_locked: Mapped[bool] = mapped_column(Boolean, default=False)
 
     submissions: Mapped[list["Submission"]] = relationship(
         back_populates="cycle", foreign_keys="Submission.cycle_id"

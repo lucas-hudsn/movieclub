@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from fastapi import Request
-from sqlalchemy import select
+from sqlalchemy import select, func, delete
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -99,6 +98,11 @@ def dashboard(
 
     banned_ids = {u.id for u in cycle.banned_users}
 
+    # Calculate max submissions: min(4, team member count)
+    team_member_count = db.scalar(select(func.count()).select_from(User).where(User.team_id == user.team_id)) or 0
+    max_submissions = min(4, team_member_count)
+    submissions_locked = cycle.submissions_locked
+
     return templates.TemplateResponse(
         request=request,
         name="dashboard.html",
@@ -112,6 +116,7 @@ def dashboard(
                 cycle.status == CycleStatus.submitting
                 and my_submission is None
                 and user.id not in banned_ids
+                and not submissions_locked
             ),
             "can_unsubmit": (
                 cycle.status == CycleStatus.submitting
@@ -126,6 +131,9 @@ def dashboard(
             "leaderboard_rows": _leaderboard_rows(db, user.team_id),
             "is_cycle_admin": is_team_admin(user, user.team),
             "CycleStatus": CycleStatus,
+            "submissions_count": len(submissions),
+            "max_submissions": max_submissions,
+            "submissions_locked": submissions_locked,
         },
     )
 
@@ -190,6 +198,26 @@ def open_ranking(
     return RedirectResponse("/vote", status_code=303)
 
 
+@router.post("/admin/cycles/{cycle_id}/reopen-submissions")
+def reopen_submissions(
+    cycle_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cycle = db.get(Cycle, cycle_id)
+    if cycle is None or user.team_id != cycle.team_id:
+        raise HTTPException(status_code=404, detail="month not found")
+    if not is_team_admin(user, db.get(Team, cycle.team_id)):
+        raise HTTPException(status_code=403, detail="only the team creator can reopen submissions")
+    if cycle.status != CycleStatus.ranking:
+        raise HTTPException(status_code=400, detail="can only reopen submissions from ranking phase")
+
+    db.execute(delete(Ranking).where(Ranking.cycle_id == cycle.id))
+    cycle.status = CycleStatus.submitting
+    db.commit()
+    return RedirectResponse("/", status_code=303)
+
+
 @router.post("/admin/cycles/{cycle_id}/close")
 def close(
     cycle_id: int,
@@ -216,6 +244,56 @@ def close(
     db.add(next_cycle)
     db.commit()
 
+    return RedirectResponse("/", status_code=303)
+
+
+@router.post("/admin/cycles/{cycle_id}/lock-submissions")
+def lock_submissions(
+    cycle_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cycle = db.get(Cycle, cycle_id)
+    if cycle is None or user.team_id != cycle.team_id:
+        raise HTTPException(status_code=404, detail="month not found")
+    if not is_team_admin(user, db.get(Team, cycle.team_id)):
+        raise HTTPException(status_code=403, detail="only the team creator can lock submissions")
+    if cycle.status != CycleStatus.submitting:
+        raise HTTPException(status_code=400, detail="can only lock during submission phase")
+    if cycle.submissions_locked:
+        raise HTTPException(status_code=400, detail="submissions are already locked")
+
+    from sqlalchemy import func
+    team_member_count = db.scalar(select(func.count()).select_from(User).where(User.team_id == cycle.team_id)) or 0
+    max_submissions = min(4, team_member_count)
+    current_submissions = db.scalar(select(func.count()).select_from(Submission).where(Submission.cycle_id == cycle_id)) or 0
+
+    if current_submissions < max_submissions:
+        raise HTTPException(status_code=400, detail=f"need {max_submissions} submissions to lock (have {current_submissions})")
+
+    cycle.submissions_locked = True
+    db.commit()
+    return RedirectResponse("/", status_code=303)
+
+
+@router.post("/admin/cycles/{cycle_id}/unlock-submissions")
+def unlock_submissions(
+    cycle_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cycle = db.get(Cycle, cycle_id)
+    if cycle is None or user.team_id != cycle.team_id:
+        raise HTTPException(status_code=404, detail="month not found")
+    if not is_team_admin(user, db.get(Team, cycle.team_id)):
+        raise HTTPException(status_code=403, detail="only the team creator can unlock submissions")
+    if cycle.status != CycleStatus.submitting:
+        raise HTTPException(status_code=400, detail="can only unlock during submission phase")
+    if not cycle.submissions_locked:
+        raise HTTPException(status_code=400, detail="submissions are not locked")
+
+    cycle.submissions_locked = False
+    db.commit()
     return RedirectResponse("/", status_code=303)
 
 
