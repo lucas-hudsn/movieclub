@@ -282,3 +282,168 @@ def test_team_join_capped_at_six(client, db):
     assert "capped at 6" in resp.text
     late = db.scalar(select(User).where(User.email == "late@x.io"))
     assert late.team_id is None
+
+
+def test_skip_from_submitting(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+    client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"})
+
+    assert client.post(f"/admin/cycles/{cid}/skip").status_code == 303
+    cycle = db.get(Cycle, cid)
+    assert cycle.status == CycleStatus.ranking
+    assert len(db.scalars(select(Ranking).where(Ranking.cycle_id == cid)).all()) == 1
+
+
+def test_skip_from_submitting_with_multiple_submissions(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0110912"}).status_code == 303
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+
+    assert client.post(f"/admin/cycles/{cid}/skip").status_code == 303
+    cycle = db.get(Cycle, cid)
+    assert cycle.status == CycleStatus.ranking
+    rankings = db.scalars(select(Ranking).where(Ranking.cycle_id == cid)).all()
+    assert len(rankings) == 4  # 2 movies x 2 users
+
+
+def test_skip_from_ranking_to_closed(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+    assert client.post(f"/submissions/{db.scalars(select(Submission).where(Submission.cycle_id == cid, Submission.user_id == 1)).first().id}/lock").status_code == 303
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0110912"}).status_code == 303
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+
+    assert client.post(f"/admin/cycles/{cid}/open-ranking").status_code == 303
+
+    assert client.post(f"/admin/cycles/{cid}/skip").status_code == 303
+    cycle = db.get(Cycle, cid)
+    assert cycle.status == CycleStatus.closed
+    assert cycle.winner_submission_id is not None
+
+    cycles = db.scalars(select(Cycle).order_by(Cycle.period)).all()
+    assert len(cycles) == 2
+
+
+def test_skip_from_closed_fails(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+
+    assert client.post(f"/admin/cycles/{cid}/skip").status_code == 303
+    assert db.get(Cycle, cid).status == CycleStatus.ranking
+    assert client.post(f"/admin/cycles/{cid}/skip").status_code == 303
+    assert db.get(Cycle, cid).status == CycleStatus.closed
+
+    assert client.post(f"/admin/cycles/{cid}/skip").status_code == 400
+
+
+def test_skip_non_admin_fails(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"})
+
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+    assert client.post(f"/admin/cycles/{cid}/skip").status_code == 403
+
+
+def test_back_from_ranking(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+    assert client.post(f"/submissions/{db.scalars(select(Submission).where(Submission.cycle_id == cid, Submission.user_id == 1)).first().id}/lock").status_code == 303
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0110912"}).status_code == 303
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+    assert client.post(f"/admin/cycles/{cid}/open-ranking").status_code == 303
+    assert len(db.scalars(select(Ranking).where(Ranking.cycle_id == cid)).all()) > 0
+
+    assert client.post(f"/admin/cycles/{cid}/back").status_code == 303
+    cycle = db.get(Cycle, cid)
+    assert cycle.status == CycleStatus.submitting
+    assert len(db.scalars(select(Ranking).where(Ranking.cycle_id == cid)).all()) == 0
+
+
+def test_back_from_closed(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0110912"}).status_code == 303
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+    assert client.post(f"/submissions/{db.scalars(select(Submission).where(Submission.cycle_id == cid, Submission.user_id == 1)).first().id}/lock").status_code == 303
+    assert client.post(f"/admin/cycles/{cid}/open-ranking").status_code == 303
+    assert client.post(f"/admin/cycles/{cid}/close").status_code == 303
+
+    next_cycle = db.scalars(
+        select(Cycle).where(Cycle.team_id == 1)
+        .order_by(Cycle.period.desc())
+        .limit(1)
+    ).first()
+    assert next_cycle is not None
+
+    assert client.post(f"/admin/cycles/{cid}/back").status_code == 303
+    cycle = db.get(Cycle, cid)
+    assert cycle.status == CycleStatus.ranking
+    assert cycle.winner_submission_id is None
+    assert cycle.loser_submission_id is None
+    assert db.scalars(select(Cycle).where(Cycle.period == next_cycle.period)).first() is None
+
+
+def test_back_from_submitting_fails(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+
+    assert client.post(f"/admin/cycles/{cid}/back").status_code == 400
+
+
+def test_back_non_admin_fails(client, db, omdb_mock):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+    assert client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"}).status_code == 303
+    assert client.post(f"/admin/cycles/{cid}/skip").status_code == 303
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+    assert client.post(f"/admin/cycles/{cid}/back").status_code == 403

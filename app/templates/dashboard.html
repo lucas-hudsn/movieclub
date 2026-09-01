@@ -99,6 +99,19 @@
       <button type="submit" class="danger">reopen submissions</button>
     </form>
     {% endif %}
+
+    {% if is_cycle_admin %}
+    {% if cycle.status in (CycleStatus.submitting, CycleStatus.ranking) %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/skip">
+      <button type="submit">skip to next stage</button>
+    </form>
+    {% endif %}
+    {% if cycle.status in (CycleStatus.ranking, CycleStatus.closed) %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/back">
+      <button type="submit" class="danger">go back</button>
+    </form>
+    {% endif %}
+    {% endif %}
   </section>
 
   <section class="panel">

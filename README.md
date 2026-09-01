@@ -1,4 +1,4 @@
-# MOVIE CLUB // `▚▚ SIGNAL ACQUIRED ▚▚`
+# MOVIE CLUB
 
 **Live: <https://movieclub.fastapicloud.dev>**
 
@@ -11,8 +11,10 @@ on the bench.
 ## How a cycle works
 
 1. **SUBMITTING** — each member picks one movie (searched live against [OMDB](https://www.omdbapi.com/)). One pick per person, no duplicate movies. An admin must **lock submissions** (requires the minimum submissions: min of 4 and team size) before ranking can start.
-2. **RANKING** — an admin starts ranking after locking. Every member orders all locked films best → worst with ▲▼ controls on the `/vote` page. Points are awarded by **Borda count**: position 1 of N films gets `N−1` points, last gets `0`. Members can abstain (inactive ballots aren't tallied). Admins can **reopen submissions** to return to the submitting phase (clears all votes).
+2. **RANKING** — an admin starts ranking after locking. Every member orders all locked films best → worst with ▲▼ controls on the `/vote` page. Points are awarded by **Borda count**: position 1 of N films gets `N−1` points, last gets `0`. Members can abstain (inactive ballots aren't tallied). Admins can **reopen submissions** to return to the submitting phase (clears all votes), or **go back** from a closed cycle to reopen it for ranking.
 3. **CLOSED** — the film with the most points wins; the film with the fewest points sends its submitter to the bench: they can still watch and rank next month, but cannot submit. A new cycle starts automatically.
+
+**Admin shortcuts:** at any point an admin can **skip to the next stage** (force-open ranking without the minimum-submission gate, or force-close and tally even with partial voting) and **go back** (revert ranking → submitting, or closed → ranking). Useful when members are lagging or a mistake was made.
 
 An all-time **leaderboard** tallies wins and losses per member.
 
@@ -74,7 +76,7 @@ app/
     auth.py          register/login/logout
     teams.py         team creation + invite-code joining
     movies.py        search + submission management
-    cycles.py        dashboard, phase transitions, leaderboard
+    cycles.py        dashboard, phase transitions, leaderboard, skip/back
     rankings.py      ballot ordering (HTMX)
   templates/         Jinja2 pages + HTMX partials
   static/css/        the matrix theme
@@ -120,14 +122,6 @@ Current setup, for reference:
 
 Remember: when adding columns, migrate **before** deploying; when removing them, deploy first and migrate after (zero-downtime gradual deployments mean old and new code run side by side).
 
-### Pending: next deploy
+### Deployed: admin skip / back
 
-The current working tree (the `/vote` page, per-film locking, ballot improvements) is about to be pushed to FastAPI Cloud. Schema is unchanged — **no migration needed**, just:
-
-```bash
-uv run fastapi cloud deploy
-```
-
-Gotcha: if a build fails with "Installing Python interpreter … os error 2", check the
-app's directory setting (`fastapi cloud apps get`) — it must point at the folder
-containing `pyproject.toml` (here: `.`).
+Admin shortcuts (**skip to next stage** and **go back**) are now live on the dashboard. No schema changes — just the new `skip` and `back` routes in `cycles.py`.

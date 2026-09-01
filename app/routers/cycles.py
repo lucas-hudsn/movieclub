@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user, is_team_admin
-from app.models import Cycle, CycleStatus, Ranking, Submission, Team, User
+from app.models import Cycle, CycleStatus, Ranking, Submission, Team, User, cycle_bans
 from app.services.scoring import close_cycle, eviction_count, tally
 from app.templating import templates
 
@@ -16,6 +16,31 @@ def _next_period(period: str) -> str:
     year, month = (int(p) for p in period.split("-"))
     year, month = (year + 1, 1) if month == 12 else (year, month + 1)
     return f"{year:04d}-{month:02d}"
+
+
+def _create_rankings(cycle: Cycle, db: Session):
+    submissions = db.scalars(
+        select(Submission).where(Submission.cycle_id == cycle.id).order_by(Submission.created_at)
+    ).all()
+    members = db.scalars(select(User).where(User.team_id == cycle.team_id)).all()
+    existing = {
+        (r.user_id, r.submission_id)
+        for r in db.scalars(select(Ranking).where(Ranking.cycle_id == cycle.id)).all()
+    }
+    for u in members:
+        for pos, sub in enumerate(submissions, start=1):
+            if (u.id, sub.id) in existing:
+                continue
+            db.add(
+                Ranking(
+                    cycle_id=cycle.id,
+                    user_id=u.id,
+                    submission_id=sub.id,
+                    position=pos,
+                    ballot_active=False,
+                )
+            )
+    db.commit()
 
 
 def _get_or_create_current_cycle(db: Session, team: Team) -> Cycle:
@@ -175,24 +200,7 @@ def open_ranking(
     if len(submissions) < 2:
         raise HTTPException(status_code=400, detail="need at least 2 movies to start ranking")
 
-    members = db.scalars(select(User).where(User.team_id == cycle.team_id)).all()
-    existing = {
-        (r.user_id, r.submission_id)
-        for r in db.scalars(select(Ranking).where(Ranking.cycle_id == cycle.id)).all()
-    }
-    for u in members:
-        for pos, sub in enumerate(submissions, start=1):
-            if (u.id, sub.id) in existing:
-                continue
-            db.add(
-                Ranking(
-                    cycle_id=cycle.id,
-                    user_id=u.id,
-                    submission_id=sub.id,
-                    position=pos,
-                    ballot_active=False,
-                )
-            )
+    _create_rankings(cycle, db)
     cycle.status = CycleStatus.ranking
     db.commit()
     return RedirectResponse("/vote", status_code=303)
@@ -216,6 +224,73 @@ def reopen_submissions(
     cycle.status = CycleStatus.submitting
     db.commit()
     return RedirectResponse("/", status_code=303)
+
+
+@router.post("/admin/cycles/{cycle_id}/skip")
+def skip(
+    cycle_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cycle = db.get(Cycle, cycle_id)
+    if cycle is None or user.team_id != cycle.team_id:
+        raise HTTPException(status_code=404, detail="month not found")
+    if not is_team_admin(user, db.get(Team, cycle.team_id)):
+        raise HTTPException(status_code=403, detail="only the team creator can skip")
+
+    if cycle.status == CycleStatus.submitting:
+        _create_rankings(cycle, db)
+        cycle.status = CycleStatus.ranking
+        db.commit()
+        return RedirectResponse("/vote", status_code=303)
+
+    if cycle.status == CycleStatus.ranking:
+        winner, losers = close_cycle(cycle, db)
+        next_cycle = Cycle(team_id=cycle.team_id, period=_next_period(cycle.period))
+        next_cycle.banned_users = [db.get(User, sub.user_id) for sub in losers]
+        db.add(next_cycle)
+        db.commit()
+        return RedirectResponse("/", status_code=303)
+
+    raise HTTPException(status_code=400, detail="cannot skip a closed cycle")
+
+
+@router.post("/admin/cycles/{cycle_id}/back")
+def back(
+    cycle_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cycle = db.get(Cycle, cycle_id)
+    if cycle is None or user.team_id != cycle.team_id:
+        raise HTTPException(status_code=404, detail="month not found")
+    if not is_team_admin(user, db.get(Team, cycle.team_id)):
+        raise HTTPException(status_code=403, detail="only the team creator can go back")
+
+    if cycle.status == CycleStatus.ranking:
+        db.execute(delete(Ranking).where(Ranking.cycle_id == cycle.id))
+        cycle.status = CycleStatus.submitting
+        db.commit()
+        return RedirectResponse("/", status_code=303)
+
+    if cycle.status == CycleStatus.closed:
+        next_period = _next_period(cycle.period)
+        next_cycle = db.scalars(
+            select(Cycle)
+            .where(Cycle.team_id == cycle.team_id, Cycle.period == next_period)
+            .limit(1)
+        ).first()
+        if next_cycle is None:
+            raise HTTPException(status_code=400, detail="no next cycle to revert to")
+        db.execute(delete(cycle_bans).where(cycle_bans.c.cycle_id == next_cycle.id))
+        db.delete(next_cycle)
+        cycle.winner_submission_id = None
+        cycle.loser_submission_id = None
+        cycle.status = CycleStatus.ranking
+        db.commit()
+        return RedirectResponse("/", status_code=303)
+
+    raise HTTPException(status_code=400, detail="cannot go back from the submission phase")
 
 
 @router.post("/admin/cycles/{cycle_id}/close")
