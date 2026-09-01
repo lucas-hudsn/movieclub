@@ -43,7 +43,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(80))
     password_hash: Mapped[str] = mapped_column(String(255))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
-    manual_wins: Mapped[int] = mapped_column(Integer, default=0)
+    wins: Mapped[int] = mapped_column(Integer, default=0)
     team_id: Mapped[int | None] = mapped_column(
         ForeignKey("teams.id", use_alter=True), nullable=True
     )

@@ -3,7 +3,7 @@
 **Live: <https://movieclub.fastapicloud.dev>**
 
 A monthly movie club app for teams: everyone submits a film, everyone watches and ranks,
-the club crowns a monthly winner, and the losering pick earns their submitter a month
+the club crowns a monthly winner, and the loser's pick earns their submitter a month
 on the bench.
 
 ![stack](https://img.shields.io/badge/FastAPI-Jinja2%20%2B%20HTMX-00ff41)
@@ -16,37 +16,14 @@ on the bench.
 
 **Admin shortcuts:** at any point an admin can **skip to the next stage** (force-open ranking without the minimum-submission gate, or force-close and tally even with partial voting) and **go back** (revert ranking → submitting, or closed → ranking). Useful when members are lagging or a mistake was made.
 
-An all-time **leaderboard** tallies wins and losses per member. Admins can manually adjust win counts.
+An all-time **leaderboard** tracks wins per member. Admins can manually adjust win counts with +1/-1 buttons on the admin actions page.
 
 Joining is invite-only: the team creator shares a code from `/team`, and nobody gets in without it. The first account registered becomes the admin.
 
-## Admin actions page
-
-The `/admin/actions` page (accessible from the nav for admins) is the control center for managing the club:
-
-- **Phase controls** — lock/unlock submissions, start ranking, reopen submissions, skip to next stage, go back, and close the month. Each cycle shows only the buttons relevant to its current phase.
-- **Ban management** — for each cycle, admins can toggle which team members are banned (out of voting). Normally this is auto-set by the previous cycle's results, but admins can override it per-cycle.
-- **Leaderboard** — shows all team members with their total wins (computed + manual) and a manual wins column. Admins can add or subtract manual wins with +1/-1 buttons.
-
-The month page (`/`) no longer shows admin controls — everything is on the admin page.
-
-## Stack
-
-| Layer    | Choice                                                             |
-| -------- | ------------------------------------------------------------------ |
-| Hosting  | [FastAPI Cloud](https://fastapicloud.com)                          |
-| Backend  | FastAPI, Jinja2 templates, HTMX fragments                          |
-| Database | PostgreSQL (SQLAlchemy 2.0 + Alembic migrations), Supabase in prod |
-| Auth     | Email + password (argon2), signed session cookie                   |
-| Movies   | OMDB API (`OMDB_API_KEY` env var)                                  |
-| Styling  | Hand-rolled CSS — black / phosphor-green CRT lofi cinema theme     |
-
-## Local development
-
-Requires Python 3.13+ ([uv](https://docs.astral.sh/uv/)), Docker, and an OMDB API key.
+## Quick start
 
 ```bash
-# 1. Start Postgres (port 5433 — 5432 is left free for any local instance)
+# 1. Start Postgres (port 5433)
 docker compose up -d db
 
 # 2. Configure secrets
@@ -61,7 +38,7 @@ uv run uvicorn app.main:app --port 8100
 
 Open <http://localhost:8100> — **the first account registered becomes the admin.**
 
-### Running tests
+## Running tests
 
 ```bash
 uv run pytest
@@ -76,9 +53,10 @@ app/
   main.py            FastAPI app, static files, error pages
   config.py          pydantic-settings (.env)
   database.py        engine/session
-  models.py          User, Team, Cycle, Submission, Ranking, …
+  models.py          User, Team, Cycle, Submission, Ranking
   security.py        password hashing + session cookies
   dependencies.py    auth guards
+  templating.py      Jinja2 loader
   services/
     omdb.py          OMDB search/detail client
     scoring.py       Borda tally + winner/loser resolution
@@ -89,9 +67,10 @@ app/
     cycles.py        dashboard, phase transitions, admin actions, leaderboard
     rankings.py      ballot ordering (HTMX)
   templates/         Jinja2 pages + HTMX partials
-  static/css/        the matrix theme
+  static/css/        CRT lofi cinema theme
 alembic/             migrations
 tests/
+docs/                project documentation
 ```
 
 ## Useful commands
@@ -104,30 +83,12 @@ docker compose up -d db                           # start database
 uv run fastapi cloud deploy                       # deploy to FastAPI Cloud
 ```
 
-## Deployment (FastAPI Cloud + Supabase)
+## Documentation
 
-The app is deployed on [FastAPI Cloud](https://fastapicloud.com) at
-**<https://movieclub.fastapicloud.dev>**, with the database on Supabase Postgres
-(app auth stays as-is; Supabase is used purely as the Postgres host).
+Detailed docs live in the [`docs/`](docs/) folder:
 
-Current setup, for reference:
-
-1. **App** — `movieclub` on FastAPI Cloud, linked to this repo via `.fastapicloud/cloud.json`.
-   The entrypoint is declared in `pyproject.toml`
-   (`[tool.fastapi] entrypoint = "app.main:app"`).
-2. **Supabase ↔ FastAPI Cloud** — connected via dashboard integrations; FastAPI Cloud
-   injects a `DATABASE_URL` secret. The app normalizes it itself
-   (`postgresql://` → `postgresql+psycopg://`, adds `sslmode=require`).
-3. **Env vars** — `SECRET_KEY` and `OMDB_API_KEY` are set via
-   `fastapi cloud env set`.
-4. **Migrations** — never run automatically on deploy; apply manually:
-   ```bash
-   DATABASE_URL="postgresql+psycopg://...supabase..." uv run alembic upgrade head
-   ```
-   (The URL lives only in the FastAPI Cloud dashboard/env secrets.)
-5. **Deploying an update**:
-   ```bash
-   uv run fastapi cloud deploy
-   ```
-
-Remember: when adding columns, migrate **before** deploying; when removing them, deploy first and migrate after (zero-downtime gradual deployments mean old and new code run side by side).
+- [Setup guide](docs/SETUP.md) — local development prerequisites and configuration
+- [Architecture](docs/ARCHITECTURE.md) — how the codebase is structured
+- [Routes](docs/ROUTES.md) — all endpoints and their behavior
+- [Database](docs/DATABASE.md) — schema, models, and migrations
+- [Deployment](docs/DEPLOYMENT.md) — FastAPI Cloud + Supabase production setup

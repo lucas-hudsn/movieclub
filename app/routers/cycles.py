@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, func, delete, insert
+from sqlalchemy import select, func, delete, insert, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -61,50 +61,20 @@ def _get_or_create_current_cycle(db: Session, team: Team) -> Cycle:
 
 
 def _leaderboard_rows(db: Session, team_id: int):
-    from sqlalchemy import func
-
-    wins_sq = (
-        select(Submission.user_id.label("uid"), func.count().label("wins"))
-        .select_from(Submission)
-        .join(Cycle, Cycle.winner_submission_id == Submission.id)
-        .where(Cycle.team_id == team_id)
-        .group_by(Submission.user_id)
-        .subquery()
-    )
     return db.execute(
-        select(
-            User.name,
-            (func.coalesce(wins_sq.c.wins, 0) + User.manual_wins).label("wins"),
-        )
+        select(User.name, User.wins)
         .where(User.team_id == team_id)
-        .outerjoin(wins_sq, wins_sq.c.uid == User.id)
-        .order_by((func.coalesce(wins_sq.c.wins, 0) + User.manual_wins).desc(), User.name)
+        .order_by(User.wins.desc(), User.name)
     ).all()
 
 
 def _admin_leaderboard(db: Session, team_id: int):
-    from sqlalchemy import func
-
-    wins_sq = (
-        select(Submission.user_id.label("uid"), func.count().label("wins"))
-        .select_from(Submission)
-        .join(Cycle, Cycle.winner_submission_id == Submission.id)
-        .where(Cycle.team_id == team_id)
-        .group_by(Submission.user_id)
-        .subquery()
-    )
     rows = db.execute(
-        select(
-            User.id,
-            User.name,
-            User.manual_wins,
-            func.coalesce(wins_sq.c.wins, 0).label("computed_wins"),
-        )
+        select(User.id, User.name, User.wins)
         .where(User.team_id == team_id)
-        .outerjoin(wins_sq, wins_sq.c.uid == User.id)
-        .order_by((func.coalesce(wins_sq.c.wins, 0) + User.manual_wins).desc(), User.name)
+        .order_by(User.wins.desc(), User.name)
     ).all()
-    return [{"id": r.id, "name": r.name, "manual_wins": r.manual_wins, "wins": r.computed_wins + r.manual_wins} for r in rows]
+    return [{"id": r.id, "name": r.name, "wins": r.wins} for r in rows]
 
 
 @router.get("/")
@@ -306,6 +276,14 @@ def back(
         ).first()
         if next_cycle is None:
             raise HTTPException(status_code=400, detail="no next cycle to revert to")
+        if cycle.winner_submission_id:
+            winner_sub = db.get(Submission, cycle.winner_submission_id)
+            if winner_sub:
+                db.execute(
+                    update(User)
+                    .where(User.id == winner_sub.user_id)
+                    .values(wins=User.wins - 1)
+                )
         db.execute(delete(cycle_bans).where(cycle_bans.c.cycle_id == next_cycle.id))
         db.delete(next_cycle)
         cycle.winner_submission_id = None
@@ -470,8 +448,8 @@ def toggle_ban(
     return RedirectResponse("/admin/actions", status_code=303)
 
 
-@router.post("/admin/manual-wins/{user_id}")
-def adjust_manual_wins(
+@router.post("/admin/wins/{user_id}")
+def adjust_wins(
     user_id: int,
     delta: int,
     user: User = Depends(get_current_user),
@@ -485,7 +463,7 @@ def adjust_manual_wins(
     if target is None or target.team_id != user.team_id:
         raise HTTPException(status_code=404, detail="user not found")
 
-    target.manual_wins = max(0, target.manual_wins + delta)
+    target.wins = max(0, target.wins + delta)
     db.commit()
     return RedirectResponse("/admin/actions", status_code=303)
 

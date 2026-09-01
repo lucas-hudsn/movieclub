@@ -590,7 +590,7 @@ def test_admin_nav_link(client, db):
     assert "/admin/actions" not in page
 
 
-def test_manual_wins(client, db, omdb_mock):
+def test_adjust_wins(client, db, omdb_mock):
     from app.models import User
 
     register(client, "admin@x.io", "Admin")
@@ -599,34 +599,34 @@ def test_manual_wins(client, db, omdb_mock):
     cid = db.scalars(select(Cycle)).first().id
 
     member = db.scalars(select(User).where(User.email == "admin@x.io")).first()
-    assert member.manual_wins == 0
+    assert member.wins == 0
 
-    # add a manual win
-    resp = client.post(f"/admin/manual-wins/{member.id}?delta=1")
+    # add a win
+    resp = client.post(f"/admin/wins/{member.id}?delta=1")
     assert resp.status_code == 303
     db.refresh(member)
-    assert member.manual_wins == 1
+    assert member.wins == 1
 
     # add another
-    client.post(f"/admin/manual-wins/{member.id}?delta=1")
+    client.post(f"/admin/wins/{member.id}?delta=1")
     db.refresh(member)
-    assert member.manual_wins == 2
+    assert member.wins == 2
 
     # subtract one
-    client.post(f"/admin/manual-wins/{member.id}?delta=-1")
+    client.post(f"/admin/wins/{member.id}?delta=-1")
     db.refresh(member)
-    assert member.manual_wins == 1
+    assert member.wins == 1
 
     # can't go below zero
-    client.post(f"/admin/manual-wins/{member.id}?delta=-1")
+    client.post(f"/admin/wins/{member.id}?delta=-1")
     db.refresh(member)
-    assert member.manual_wins == 0
-    client.post(f"/admin/manual-wins/{member.id}?delta=-1")
+    assert member.wins == 0
+    client.post(f"/admin/wins/{member.id}?delta=-1")
     db.refresh(member)
-    assert member.manual_wins == 0
+    assert member.wins == 0
 
 
-def test_manual_wins_non_admin_forbidden(client, db):
+def test_adjust_wins_non_admin_forbidden(client, db):
     from app.models import User
 
     register(client, "admin@x.io", "Admin")
@@ -638,11 +638,11 @@ def test_manual_wins_non_admin_forbidden(client, db):
 
     admin = db.scalars(select(User).where(User.email == "admin@x.io")).first()
     client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
-    resp = client.post(f"/admin/manual-wins/{admin.id}?delta=1")
+    resp = client.post(f"/admin/wins/{admin.id}?delta=1")
     assert resp.status_code == 403
 
 
-def test_leaderboard_includes_manual_wins(client, db, omdb_mock):
+def test_leaderboard_includes_wins(client, db, omdb_mock):
     from app.models import User
 
     register(client, "admin@x.io", "Admin")
@@ -650,16 +650,16 @@ def test_leaderboard_includes_manual_wins(client, db, omdb_mock):
     client.get("/")
     cid = db.scalars(select(Cycle)).first().id
 
-    # add manual wins
+    # add wins
     admin = db.scalars(select(User).where(User.email == "admin@x.io")).first()
-    client.post(f"/admin/manual-wins/{admin.id}?delta=3")
+    client.post(f"/admin/wins/{admin.id}?delta=3")
     db.refresh(admin)
-    assert admin.manual_wins == 3
+    assert admin.wins == 3
 
-    # check admin page shows manual wins
+    # check admin page shows wins
     page = client.get("/admin/actions").text
-    assert "3" in page  # manual wins column
+    assert "3" in page
 
-    # check leaderboard page includes manual wins
+    # check leaderboard page includes wins
     lb = client.get("/leaderboard").text
     assert "3" in lb

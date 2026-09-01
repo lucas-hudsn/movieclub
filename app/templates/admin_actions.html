@@ -78,25 +78,24 @@
 <section class="panel">
   <h2>leaderboard</h2>
   <table>
-    <thead><tr><th>#</th><th>operator</th><th>wins</th><th>manual</th><th></th></tr></thead>
+    <thead><tr><th>#</th><th>operator</th><th>wins</th><th></th></tr></thead>
     <tbody>
     {% for row in admin_leaderboard %}
       <tr class="{% if loop.index == 1 %}top{% endif %}">
         <td>{{ loop.index }}</td>
         <td>{{ row.name }}</td>
         <td>{{ row.wins }}</td>
-        <td class="dim">{{ row.manual_wins }}</td>
         <td>
-          <form method="post" action="/admin/manual-wins/{{ row.id }}?delta=1" class="inline">
+          <form method="post" action="/admin/wins/{{ row.id }}?delta=1" class="inline">
             <button type="submit" class="linklike">+1</button>
           </form>
-          <form method="post" action="/admin/manual-wins/{{ row.id }}?delta=-1" class="inline">
+          <form method="post" action="/admin/wins/{{ row.id }}?delta=-1" class="inline">
             <button type="submit" class="linklike danger-link">-1</button>
           </form>
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="5" class="dim">no wins yet.</td></tr>
+      <tr><td colspan="4" class="dim">no wins yet.</td></tr>
     {% endfor %}
     </tbody>
   </table>
