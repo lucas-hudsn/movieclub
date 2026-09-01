@@ -1,4 +1,4 @@
-# MOVIE CLUB
+# MOVIE CLUB // `▚▚ SIGNAL ACQUIRED ▚▚`
 
 **Live: <https://movieclub.fastapicloud.dev>**
 
