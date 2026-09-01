@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import Cycle, CycleStatus, Ranking, Submission, User
@@ -73,4 +73,9 @@ def close_cycle(cycle: Cycle, db: Session) -> tuple[Submission | None, list[Subm
     cycle.status = CycleStatus.closed
     cycle.winner_submission_id = winner.id
     cycle.loser_submission_id = losers[0].id if losers else None
+    db.execute(
+        update(User)
+        .where(User.id == winner.user_id)
+        .values(wins=User.wins + 1)
+    )
     return winner, losers

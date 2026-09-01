@@ -77,41 +77,6 @@
     <p class="dim">voting is open &mdash; head over to cast your ballot.</p>
     <a href="/vote">go vote &rarr;</a>
     {% endif %}
-
-    {% if is_cycle_admin and cycle.status == CycleStatus.submitting %}
-    {% if cycle.submissions_locked %}
-    <form method="post" action="/admin/cycles/{{ cycle.id }}/open-ranking">
-      <button type="submit">start ranking</button>
-    </form>
-    <form method="post" action="/admin/cycles/{{ cycle.id }}/unlock-submissions">
-      <button type="submit">unlock submissions</button>
-    </form>
-    {% else %}
-    <form method="post" action="/admin/cycles/{{ cycle.id }}/lock-submissions">
-      <button type="submit">lock submissions ({{ submissions_count }}/{{ max_submissions }})</button>
-    </form>
-    {% endif %}
-    {% endif %}
-
-    {% if is_cycle_admin and cycle.status == CycleStatus.ranking %}
-    <form method="post" action="/admin/cycles/{{ cycle.id }}/reopen-submissions"
-          onsubmit="return confirm('This will clear all votes. Reopen submissions?')">
-      <button type="submit" class="danger">reopen submissions</button>
-    </form>
-    {% endif %}
-
-    {% if is_cycle_admin %}
-    {% if cycle.status in (CycleStatus.submitting, CycleStatus.ranking) %}
-    <form method="post" action="/admin/cycles/{{ cycle.id }}/skip">
-      <button type="submit">skip to next stage</button>
-    </form>
-    {% endif %}
-    {% if cycle.status in (CycleStatus.ranking, CycleStatus.closed) %}
-    <form method="post" action="/admin/cycles/{{ cycle.id }}/back">
-      <button type="submit" class="danger">go back</button>
-    </form>
-    {% endif %}
-    {% endif %}
   </section>
 
   <section class="panel">
@@ -134,12 +99,6 @@
     </tbody>
   </table>
 </div>
-
-{% if is_cycle_admin %}
-<form method="post" action="/admin/cycles/{{ cycle.id }}/close">
-  <button type="submit" class="danger">close month, crown winner</button>
-</form>
-{% endif %}
 {% endif %}
 
 {% endblock %}

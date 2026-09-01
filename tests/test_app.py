@@ -30,7 +30,7 @@ def test_register_login_and_dashboard(client):
 def test_first_user_is_admin(client):
     register(client, "a@x.io")
     create_team(client)
-    assert "lock submissions" in client.get("/").text
+    assert "/admin/actions" in client.get("/").text
 
     client.post("/logout")
     register(client, "b@x.io")
@@ -447,3 +447,219 @@ def test_back_non_admin_fails(client, db, omdb_mock):
     join_team(client, code)
     client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
     assert client.post(f"/admin/cycles/{cid}/back").status_code == 403
+
+
+def test_admin_actions_page(client, db, omdb_mock):
+    from app.models import User
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+    resp = client.get("/admin/actions")
+    assert resp.status_code == 200
+    assert "admin actions" in resp.text
+    assert "lock submissions" in resp.text
+    assert "admin@x.io" in resp.text
+    assert "member@x.io" in resp.text
+
+    # submit and lock, then check that start ranking button appears
+    client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0133093"})
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+    client.post(f"/cycles/{cid}/submissions", data={"imdb_id": "tt0110912"})
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+    client.post(f"/admin/cycles/{cid}/lock-submissions")
+    resp = client.get("/admin/actions")
+    assert "start ranking" in resp.text
+
+
+def test_admin_actions_non_admin_forbidden(client, db):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+    resp = client.get("/admin/actions")
+    assert resp.status_code == 403
+
+
+def test_toggle_ban(client, db, omdb_mock):
+    from app.models import User
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    client.post("/login", data={"email": "admin@x.io", "password": "hunter2222"})
+
+    member = db.scalars(select(User).where(User.email == "member@x.io")).first()
+
+    # ban the member
+    resp = client.post(f"/admin/cycles/{cid}/toggle-ban/{member.id}")
+    assert resp.status_code == 303
+    cycle = db.get(Cycle, cid)
+    db.refresh(cycle)
+    assert member.id in {u.id for u in cycle.banned_users}
+
+    # ban appears on admin page
+    page = client.get("/admin/actions").text
+    assert "unban" in page
+
+    # unban the member
+    resp = client.post(f"/admin/cycles/{cid}/toggle-ban/{member.id}")
+    assert resp.status_code == 303
+    db.refresh(cycle)
+    assert member.id not in {u.id for u in cycle.banned_users}
+
+    # page shows ban again
+    page = client.get("/admin/actions").text
+    assert "ban" in page
+    assert "unban" not in page
+
+
+def test_toggle_ban_non_admin_forbidden(client, db):
+    from app.models import User
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    member = db.scalars(select(User).where(User.email == "member@x.io")).first()
+
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+    resp = client.post(f"/admin/cycles/{cid}/toggle-ban/{member.id}")
+    assert resp.status_code == 403
+
+
+def test_toggle_ban_nonexistent_user(client, db):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+
+    resp = client.post(f"/admin/cycles/{cid}/toggle-ban/9999")
+    assert resp.status_code == 404
+
+
+def test_toggle_ban_nonexistent_cycle(client, db):
+    from app.models import User
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    member = db.scalars(select(User).where(User.email == "member@x.io")).first()
+
+    resp = client.post(f"/admin/cycles/9999/toggle-ban/{member.id}")
+    assert resp.status_code == 404
+
+
+def test_admin_nav_link(client, db):
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+
+    page = client.get("/").text
+    assert "/admin/actions" in page
+
+    # non-admin doesn't see the link
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+
+    page = client.get("/").text
+    assert "/admin/actions" not in page
+
+
+def test_adjust_wins(client, db, omdb_mock):
+    from app.models import User
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+
+    member = db.scalars(select(User).where(User.email == "admin@x.io")).first()
+    assert member.wins == 0
+
+    # add a win
+    resp = client.post(f"/admin/wins/{member.id}?delta=1")
+    assert resp.status_code == 303
+    db.refresh(member)
+    assert member.wins == 1
+
+    # add another
+    client.post(f"/admin/wins/{member.id}?delta=1")
+    db.refresh(member)
+    assert member.wins == 2
+
+    # subtract one
+    client.post(f"/admin/wins/{member.id}?delta=-1")
+    db.refresh(member)
+    assert member.wins == 1
+
+    # can't go below zero
+    client.post(f"/admin/wins/{member.id}?delta=-1")
+    db.refresh(member)
+    assert member.wins == 0
+    client.post(f"/admin/wins/{member.id}?delta=-1")
+    db.refresh(member)
+    assert member.wins == 0
+
+
+def test_adjust_wins_non_admin_forbidden(client, db):
+    from app.models import User
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    code = team_invite_code(db)
+    register(client, "member@x.io", "Member")
+    join_team(client, code)
+
+    admin = db.scalars(select(User).where(User.email == "admin@x.io")).first()
+    client.post("/login", data={"email": "member@x.io", "password": "hunter2222"})
+    resp = client.post(f"/admin/wins/{admin.id}?delta=1")
+    assert resp.status_code == 403
+
+
+def test_leaderboard_includes_wins(client, db, omdb_mock):
+    from app.models import User
+
+    register(client, "admin@x.io", "Admin")
+    create_team(client)
+    client.get("/")
+    cid = db.scalars(select(Cycle)).first().id
+
+    # add wins
+    admin = db.scalars(select(User).where(User.email == "admin@x.io")).first()
+    client.post(f"/admin/wins/{admin.id}?delta=3")
+    db.refresh(admin)
+    assert admin.wins == 3
+
+    # check admin page shows wins
+    page = client.get("/admin/actions").text
+    assert "3" in page
+
+    # check leaderboard page includes wins
+    lb = client.get("/leaderboard").text
+    assert "3" in lb

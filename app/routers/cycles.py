@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, insert, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -61,25 +61,20 @@ def _get_or_create_current_cycle(db: Session, team: Team) -> Cycle:
 
 
 def _leaderboard_rows(db: Session, team_id: int):
-    from sqlalchemy import func
-
-    wins_sq = (
-        select(Submission.user_id.label("uid"), func.count().label("wins"))
-        .select_from(Submission)
-        .join(Cycle, Cycle.winner_submission_id == Submission.id)
-        .where(Cycle.team_id == team_id)
-        .group_by(Submission.user_id)
-        .subquery()
-    )
     return db.execute(
-        select(
-            User.name,
-            func.coalesce(wins_sq.c.wins, 0).label("wins"),
-        )
+        select(User.name, User.wins)
         .where(User.team_id == team_id)
-        .outerjoin(wins_sq, wins_sq.c.uid == User.id)
-        .order_by(func.coalesce(wins_sq.c.wins, 0).desc(), User.name)
+        .order_by(User.wins.desc(), User.name)
     ).all()
+
+
+def _admin_leaderboard(db: Session, team_id: int):
+    rows = db.execute(
+        select(User.id, User.name, User.wins)
+        .where(User.team_id == team_id)
+        .order_by(User.wins.desc(), User.name)
+    ).all()
+    return [{"id": r.id, "name": r.name, "wins": r.wins} for r in rows]
 
 
 @router.get("/")
@@ -154,7 +149,6 @@ def dashboard(
             "winner": winner,
             "losers": losers,
             "leaderboard_rows": _leaderboard_rows(db, user.team_id),
-            "is_cycle_admin": is_team_admin(user, user.team),
             "CycleStatus": CycleStatus,
             "submissions_count": len(submissions),
             "max_submissions": max_submissions,
@@ -282,6 +276,14 @@ def back(
         ).first()
         if next_cycle is None:
             raise HTTPException(status_code=400, detail="no next cycle to revert to")
+        if cycle.winner_submission_id:
+            winner_sub = db.get(Submission, cycle.winner_submission_id)
+            if winner_sub:
+                db.execute(
+                    update(User)
+                    .where(User.id == winner_sub.user_id)
+                    .values(wins=User.wins - 1)
+                )
         db.execute(delete(cycle_bans).where(cycle_bans.c.cycle_id == next_cycle.id))
         db.delete(next_cycle)
         cycle.winner_submission_id = None
@@ -370,6 +372,100 @@ def unlock_submissions(
     cycle.submissions_locked = False
     db.commit()
     return RedirectResponse("/", status_code=303)
+
+
+@router.get("/admin/actions")
+def admin_actions(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if user.team_id is None:
+        return RedirectResponse("/teams/onboard", status_code=303)
+    team = db.get(Team, user.team_id)
+    if not is_team_admin(user, team):
+        raise HTTPException(status_code=403, detail="admins only")
+
+    cycles = db.scalars(
+        select(Cycle)
+        .where(Cycle.team_id == team.id)
+        .order_by(Cycle.period.desc())
+    ).all()
+    members = db.scalars(
+        select(User).where(User.team_id == team.id).order_by(User.name)
+    ).all()
+    banned_ids_by_cycle = {
+        c.id: {u.id for u in c.banned_users} for c in cycles
+    }
+    admin_leaderboard = _admin_leaderboard(db, team.id)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_actions.html",
+        context={
+            "user": user,
+            "team": team,
+            "cycles": cycles,
+            "members": members,
+            "banned_ids_by_cycle": banned_ids_by_cycle,
+            "admin_leaderboard": admin_leaderboard,
+            "CycleStatus": CycleStatus,
+        },
+    )
+
+
+@router.post("/admin/cycles/{cycle_id}/toggle-ban/{user_id}")
+def toggle_ban(
+    cycle_id: int,
+    user_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    cycle = db.get(Cycle, cycle_id)
+    if cycle is None or user.team_id != cycle.team_id:
+        raise HTTPException(status_code=404, detail="month not found")
+    team = db.get(Team, cycle.team_id)
+    if not is_team_admin(user, team):
+        raise HTTPException(status_code=403, detail="only admins can change bans")
+
+    target = db.get(User, user_id)
+    if target is None or target.team_id != cycle.team_id:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    stmt = select(cycle_bans).where(
+        cycle_bans.c.cycle_id == cycle_id, cycle_bans.c.user_id == user_id
+    )
+    existing = db.scalar(stmt)
+    if existing:
+        db.execute(
+            delete(cycle_bans).where(
+                cycle_bans.c.cycle_id == cycle_id, cycle_bans.c.user_id == user_id
+            )
+        )
+    else:
+        db.execute(insert(cycle_bans).values(cycle_id=cycle_id, user_id=user_id))
+    db.commit()
+    return RedirectResponse("/admin/actions", status_code=303)
+
+
+@router.post("/admin/wins/{user_id}")
+def adjust_wins(
+    user_id: int,
+    delta: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    team = db.get(Team, user.team_id)
+    if not is_team_admin(user, team):
+        raise HTTPException(status_code=403, detail="admins only")
+
+    target = db.get(User, user_id)
+    if target is None or target.team_id != user.team_id:
+        raise HTTPException(status_code=404, detail="user not found")
+
+    target.wins = max(0, target.wins + delta)
+    db.commit()
+    return RedirectResponse("/admin/actions", status_code=303)
 
 
 @router.get("/leaderboard")

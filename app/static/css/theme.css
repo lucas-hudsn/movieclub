@@ -437,3 +437,31 @@ tr.top td {
 .danger-link {
   color: #ff5555;
 }
+
+/* admin actions page */
+.cycle-card {
+  margin-bottom: 1.5rem;
+}
+.cycle-card h2 {
+  margin-bottom: 0.75rem;
+}
+.phase {
+  color: var(--green-dim);
+  font-size: 0.85em;
+}
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+.ban-table th,
+.ban-table td {
+  padding: 0.3rem 0.5rem;
+}
+.ban-table tr.banned {
+  background: rgba(255, 85, 85, 0.08);
+}
+.ban-table tr.banned td {
+  color: var(--danger);
+}
