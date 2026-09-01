@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}admin actions // movie club{% endblock %}
+{% block content %}
+
+<h1>admin actions</h1>
+
+{% for cycle in cycles %}
+{% set is_banned = banned_ids_by_cycle[cycle.id] %}
+<section class="panel cycle-card">
+  <h2>{{ cycle.period|month }} <span class="phase">{{ cycle.status.value }}</span></h2>
+
+  <div class="admin-actions">
+    {% if cycle.status == CycleStatus.submitting %}
+    {% if cycle.submissions_locked %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/open-ranking">
+      <button type="submit">start ranking</button>
+    </form>
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/unlock-submissions">
+      <button type="submit">unlock submissions</button>
+    </form>
+    {% else %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/lock-submissions">
+      <button type="submit">lock submissions</button>
+    </form>
+    {% endif %}
+    {% endif %}
+
+    {% if cycle.status == CycleStatus.ranking %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/reopen-submissions"
+          onsubmit="return confirm('This will clear all votes. Reopen submissions?')">
+      <button type="submit" class="danger">reopen submissions</button>
+    </form>
+    {% endif %}
+
+    {% if cycle.status in (CycleStatus.submitting, CycleStatus.ranking) %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/skip">
+      <button type="submit">skip to next stage</button>
+    </form>
+    {% endif %}
+
+    {% if cycle.status in (CycleStatus.ranking, CycleStatus.closed) %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/back">
+      <button type="submit" class="danger">go back</button>
+    </form>
+    {% endif %}
+
+    {% if cycle.status == CycleStatus.ranking %}
+    <form method="post" action="/admin/cycles/{{ cycle.id }}/close">
+      <button type="submit" class="danger">close month, crown winner</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <h3>out of voting</h3>
+  <table class="ban-table">
+    <thead><tr><th>operator</th><th>email</th><th></th></tr></thead>
+    <tbody>
+    {% for m in members %}
+      <tr class="{% if m.id in is_banned %}banned{% endif %}">
+        <td>{% if m.id == team.created_by_id %}&#9733; {% endif %}{{ m.name }}</td>
+        <td class="dim">{{ m.email }}</td>
+        <td>
+          <form method="post" action="/admin/cycles/{{ cycle.id }}/toggle-ban/{{ m.id }}" class="inline">
+            <button type="submit" class="linklike{% if m.id in is_banned %} danger-link{% endif %}">
+              {% if m.id in is_banned %}unban{% else %}ban{% endif %}
+            </button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<p class="dim">no months found.</p>
+{% endfor %}
+
+<section class="panel">
+  <h2>leaderboard</h2>
+  <table>
+    <thead><tr><th>#</th><th>operator</th><th>wins</th><th>manual</th><th></th></tr></thead>
+    <tbody>
+    {% for row in admin_leaderboard %}
+      <tr class="{% if loop.index == 1 %}top{% endif %}">
+        <td>{{ loop.index }}</td>
+        <td>{{ row.name }}</td>
+        <td>{{ row.wins }}</td>
+        <td class="dim">{{ row.manual_wins }}</td>
+        <td>
+          <form method="post" action="/admin/manual-wins/{{ row.id }}?delta=1" class="inline">
+            <button type="submit" class="linklike">+1</button>
+          </form>
+          <form method="post" action="/admin/manual-wins/{{ row.id }}?delta=-1" class="inline">
+            <button type="submit" class="linklike danger-link">-1</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="dim">no wins yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% endblock %}

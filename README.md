@@ -16,9 +16,19 @@ on the bench.
 
 **Admin shortcuts:** at any point an admin can **skip to the next stage** (force-open ranking without the minimum-submission gate, or force-close and tally even with partial voting) and **go back** (revert ranking → submitting, or closed → ranking). Useful when members are lagging or a mistake was made.
 
-An all-time **leaderboard** tallies wins and losses per member.
+An all-time **leaderboard** tallies wins and losses per member. Admins can manually adjust win counts.
 
 Joining is invite-only: the team creator shares a code from `/team`, and nobody gets in without it. The first account registered becomes the admin.
+
+## Admin actions page
+
+The `/admin/actions` page (accessible from the nav for admins) is the control center for managing the club:
+
+- **Phase controls** — lock/unlock submissions, start ranking, reopen submissions, skip to next stage, go back, and close the month. Each cycle shows only the buttons relevant to its current phase.
+- **Ban management** — for each cycle, admins can toggle which team members are banned (out of voting). Normally this is auto-set by the previous cycle's results, but admins can override it per-cycle.
+- **Leaderboard** — shows all team members with their total wins (computed + manual) and a manual wins column. Admins can add or subtract manual wins with +1/-1 buttons.
+
+The month page (`/`) no longer shows admin controls — everything is on the admin page.
 
 ## Stack
 
@@ -76,7 +86,7 @@ app/
     auth.py          register/login/logout
     teams.py         team creation + invite-code joining
     movies.py        search + submission management
-    cycles.py        dashboard, phase transitions, leaderboard, skip/back
+    cycles.py        dashboard, phase transitions, admin actions, leaderboard
     rankings.py      ballot ordering (HTMX)
   templates/         Jinja2 pages + HTMX partials
   static/css/        the matrix theme
@@ -121,7 +131,3 @@ Current setup, for reference:
    ```
 
 Remember: when adding columns, migrate **before** deploying; when removing them, deploy first and migrate after (zero-downtime gradual deployments mean old and new code run side by side).
-
-### Deployed: admin skip / back
-
-Admin shortcuts (**skip to next stage** and **go back**) are now live on the dashboard. No schema changes — just the new `skip` and `back` routes in `cycles.py`.
